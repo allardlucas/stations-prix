@@ -72,12 +72,18 @@ body,
   z-index: 500;
   margin: 0;
   padding: 4px;
+  max-height: min(46vh, 360px);
+  overflow: auto;
   list-style: none;
   background: rgba(12, 14, 18, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+}
+
+.ranking li + li {
+  margin-top: 2px;
 }
 
 .ranking button {
@@ -120,6 +126,34 @@ body,
 
 .ranking .age {
   color: rgba(255, 255, 255, 0.45);
+}
+
+.ranking .go,
+.sheet .go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.ranking .go {
+  padding: 0 10px 6px 2.2em;
+}
+
+.go a {
+  color: rgba(255, 255, 255, 0.78);
+  text-decoration: none;
+  font-size: 11px;
+  line-height: 1.2;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+.go a:hover,
+.go a:focus {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .pin {
@@ -209,6 +243,19 @@ body,
   margin: 10px 12px;
   font-size: 13px;
   line-height: 1.4;
+}
+
+.sheet .brand {
+  font-weight: 650;
+}
+
+.sheet .hours {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.sheet .go {
+  margin-top: 8px;
 }
 
 .leaflet-container a.leaflet-popup-close-button {
