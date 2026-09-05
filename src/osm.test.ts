@@ -8,7 +8,8 @@ import {
   decideSnaps,
   expandBboxKm,
   hintFromRaw,
-  OVERPASS_URL,
+  NOMINATIM_URL,
+  parseNominatimFuels,
   parseOverpassFuels,
   pickReliableSnap,
   refreshSnaps,
@@ -22,6 +23,7 @@ import {
 
 /** Fixture ODS Intermarché Itxassou — geom officiel faux d’~1,6 km. */
 const itxassouOds: SnapHint = {
+  id: "64250001",
   lat: 43.338,
   lon: -1.405,
   address: "ZA Errobi",
@@ -39,19 +41,23 @@ const itxassouRaw: RawStation = {
   gazole_maj: "2026-09-04T10:24:46+00:00",
 };
 
-/** Pompe OSM réelle (node 25212773). */
+/** Pompe OSM réelle (node 25212773) — forme Nominatim live. */
 const intermarcheOsm: OsmFuel = {
   lat: 43.3503789,
   lon: -1.4155828,
   name: "Intermarché",
   brand: "Intermarché",
+  city: "Itxassou",
   postcode: "64250",
+  refPrixId: "64250001",
 };
 
-/** Autre `amenity=fuel` dans le rayon 2 km, plus proche du geom ODS, sans tags. */
+/** Autre `amenity=fuel` dans le rayon 2 km, plus proche du geom ODS. Même ville/CP. */
 const unnamedOsm: OsmFuel = {
   lat: 43.3278698,
   lon: -1.3949709,
+  city: "Itxassou",
+  postcode: "64250",
 };
 
 const itxassouPois = [intermarcheOsm, unnamedOsm];
@@ -134,6 +140,17 @@ describe("pickReliableSnap", () => {
     ).toEqual({ kind: "keep" });
   });
 
+  it("keeps ODS when two pumps share city/CP and none has the ODS ref", () => {
+    const decision = pickReliableSnap(
+      { ...itxassouOds, id: undefined },
+      [
+        { ...intermarcheOsm, refPrixId: undefined },
+        unnamedOsm,
+      ],
+    );
+    expect(decision.kind).toBe("keep");
+  });
+
   it("keeps ODS when two similar untagged pumps are ambiguous", () => {
     const decision = pickReliableSnap(
       { lat: 43.4, lon: -1.4 },
@@ -181,9 +198,17 @@ describe("pickReliableSnap", () => {
 });
 
 describe("scoreCandidate", () => {
-  it("rewards postcode over a slightly closer untagged POI", () => {
-    const inter = scoreCandidate(itxassouOds, intermarcheOsm);
-    const other = scoreCandidate(itxassouOds, unnamedOsm);
+  it("rewards postcode over a slightly closer untagged POI (Overpass-shaped)", () => {
+    const inter = scoreCandidate(itxassouOds, {
+      lat: intermarcheOsm.lat,
+      lon: intermarcheOsm.lon,
+      name: "Intermarché",
+      postcode: "64250",
+    });
+    const other = scoreCandidate(itxassouOds, {
+      lat: unnamedOsm.lat,
+      lon: unnamedOsm.lon,
+    });
     expect(inter.postcodeScore).toBe(1);
     expect(other.postcodeScore).toBe(0);
     expect(inter.score).toBeGreaterThan(other.score);
@@ -224,7 +249,56 @@ describe("parseOverpassFuels", () => {
       brand: "Intermarché",
       postcode: "64250",
     });
-    expect(pois[1]).toEqual({ lat: 43.3278698, lon: -1.3949709 });
+    expect(pois[1]).toMatchObject({ lat: 43.3278698, lon: -1.3949709 });
+  });
+
+  it("reads ref:FR:prix-carburants", () => {
+    expect(
+      parseOverpassFuels({
+        elements: [
+          {
+            type: "node",
+            lat: 43.35,
+            lon: -1.41,
+            tags: { "ref:FR:prix-carburants": "64250001" },
+          },
+        ],
+      })[0]?.refPrixId,
+    ).toBe("64250001");
+  });
+});
+
+describe("parseNominatimFuels", () => {
+  it("reads lat/lon strings, village, postcode and ODS ref", () => {
+    const pois = parseNominatimFuels([
+      {
+        lat: "43.3503789",
+        lon: "-1.4155828",
+        category: "amenity",
+        type: "fuel",
+        name: "Intermarché",
+        address: { village: "Itxassou", postcode: "64250", road: "Inbidiako bidea" },
+        extratags: { "ref:FR:prix-carburants": "64250001", brand: "Intermarché" },
+      },
+      {
+        lat: "43.49",
+        lon: "-1.47",
+        category: "highway",
+        type: "bus_stop",
+        name: "not a pump",
+      },
+    ]);
+    expect(pois).toHaveLength(1);
+    expect(pois[0]).toMatchObject({
+      lat: 43.3503789,
+      lon: -1.4155828,
+      name: "Intermarché",
+      brand: "Intermarché",
+      city: "Itxassou",
+      postcode: "64250",
+      address: "Inbidiako bidea",
+      refPrixId: "64250001",
+    });
   });
 });
 
@@ -273,28 +347,27 @@ describe("refreshSnaps", () => {
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
-  it("fills the cache from one Overpass bbox query", async () => {
+  it("fills the cache from one Nominatim viewbox query", async () => {
     const fetchFn = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        elements: [
-          {
-            type: "node",
-            lat: intermarcheOsm.lat,
-            lon: intermarcheOsm.lon,
-            tags: {
-              name: "Intermarché",
-              brand: "Intermarché",
-              "addr:postcode": "64250",
-            },
-          },
-          {
-            type: "way",
-            center: { lat: unnamedOsm.lat, lon: unnamedOsm.lon },
-            tags: { amenity: "fuel" },
-          },
-        ],
-      }),
+      json: async () => [
+        {
+          lat: String(intermarcheOsm.lat),
+          lon: String(intermarcheOsm.lon),
+          category: "amenity",
+          type: "fuel",
+          name: "Intermarché",
+          address: { village: "Itxassou", postcode: "64250" },
+          extratags: { "ref:FR:prix-carburants": "64250001" },
+        },
+        {
+          lat: String(unnamedOsm.lat),
+          lon: String(unnamedOsm.lon),
+          category: "amenity",
+          type: "fuel",
+          address: { village: "Itxassou", postcode: "64250" },
+        },
+      ],
     });
     const cache = new Map<string, SnapDecision>();
     const changed = await refreshSnaps([itxassouRaw], itxassouBbox, cache, {
@@ -302,8 +375,8 @@ describe("refreshSnaps", () => {
     });
     expect(changed).toBe(true);
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    const url = fetchFn.mock.calls[0]?.[0];
-    expect(url).toBe(OVERPASS_URL);
+    const url = String(fetchFn.mock.calls[0]?.[0]);
+    expect(url).toContain(NOMINATIM_URL);
     const decision = cache.get("64250001");
     expect(decision?.kind).toBe("snap");
     if (decision?.kind === "snap") {

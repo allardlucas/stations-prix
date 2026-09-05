@@ -20,7 +20,7 @@ En ligne : https://allardlucas.github.io/stations-prix/
 
 Flux open data [prix-des-carburants-en-france-flux-instantane-v2](https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records), refresh côté source d'environ 10 min.
 
-La page fetch l'API depuis le navigateur. L'API envoie `Access-Control-Allow-Origin: *`, donc pas de proxy. Les coordonnées viennent de `geom.lat` et `geom.lon`, pas des champs `latitude` et `longitude` en micro-degrés. Après le fetch viewport, un recalage OSM (`amenity=fuel` dans ~2 km, Overpass) peut remplacer le pin et les liens **Y aller** si le match est fiable (un seul candidat, ou meilleur score proximité + adresse/ville/CP). Sinon les coords ODS restent. Cache mémoire par id pour la session ; échec OSM = fallback ODS silencieux. Pas de table de corrections hardcodée.
+La page fetch l'API depuis le navigateur. L'API envoie `Access-Control-Allow-Origin: *`, donc pas de proxy. Les coordonnées viennent de `geom.lat` et `geom.lon`, pas des champs `latitude` et `longitude` en micro-degrés. Après le fetch viewport, un recalage OSM (`amenity=fuel` dans ~2 km, Nominatim puis Overpass) peut remplacer le pin et les liens **Y aller** si le match est fiable (lien `ref:FR:prix-carburants`, un seul candidat, ou meilleur score proximité + adresse/ville/CP). Sinon les coords ODS restent. Cache mémoire par id pour la session ; échec OSM = fallback ODS silencieux. Pas de table de corrections hardcodée.
 
 Si la géoloc est refusée ou expire, le centre est Bayonne (43.49, -1.47). Ensuite chaque pan/zoom recharge les stations de la **zone visible** (`in_bbox`, debounce 400 ms). Pas de dump national.
 

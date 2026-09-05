@@ -16,11 +16,16 @@ export const SNAP_CLEAR_NEAR_KM = 0.4;
 export const SNAP_CLEAR_NEAR_GAP_KM = 0.6;
 
 export const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+export const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 export const OSM_IDENT =
   "stations-prix/1.0 (https://github.com/allardlucas/stations-prix)";
 
-const OVERPASS_CLIENT_MS = 4000;
+const NOMINATIM_CLIENT_MS = 6000;
+const OVERPASS_CLIENT_MS = 12_000;
+const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const KM_PER_DEG_LAT = (EARTH_RADIUS_KM * Math.PI) / 180;
+
+let lastNominatimAt = 0;
 
 export type OsmFuel = LatLon & {
   name?: string;
@@ -28,9 +33,12 @@ export type OsmFuel = LatLon & {
   address?: string;
   city?: string;
   postcode?: string;
+  /** Tag OSM `ref:FR:prix-carburants` = id ODS. */
+  refPrixId?: string;
 };
 
 export type SnapHint = LatLon & {
+  id?: string;
   address?: string;
   city?: string;
   postcode?: string;
@@ -81,6 +89,7 @@ export function hintFromRaw(raw: RawStation): SnapHint | null {
     return null;
   }
   return {
+    id: stationSnapId(raw),
     lat,
     lon,
     address: raw.adresse ?? undefined,
@@ -247,6 +256,18 @@ export function pickReliableSnap(
     return { kind: "keep" };
   }
 
+  if (hint.id) {
+    const linked = scored.filter((poi) => poi.refPrixId === hint.id);
+    if (linked.length === 1) {
+      return {
+        kind: "snap",
+        lat: linked[0].lat,
+        lon: linked[0].lon,
+        score: 1,
+      };
+    }
+  }
+
   const best = scored[0];
   if (scored.length === 1) {
     return { kind: "snap", lat: best.lat, lon: best.lon, score: best.score };
@@ -321,7 +342,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function asFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function asOptionalString(value: unknown): string | undefined {
@@ -364,9 +392,146 @@ export function parseOverpassFuels(body: unknown): OsmFuel[] {
           asOptionalString(tags["addr:city"]) ??
           asOptionalString(tags["addr:municipality"]),
         postcode: asOptionalString(tags["addr:postcode"]),
+        refPrixId: asOptionalString(tags["ref:FR:prix-carburants"]),
       },
     ];
   });
+}
+
+function osmHeaders(): HeadersInit {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (typeof document === "undefined") {
+    headers["User-Agent"] = OSM_IDENT;
+  }
+  return headers;
+}
+
+function withTimeout(signal: AbortSignal | undefined, ms: number): AbortSignal {
+  const timeout = AbortSignal.timeout(ms);
+  return signal ? AbortSignal.any([signal, timeout]) : timeout;
+}
+
+export function nominatimFuelSearchUrl(bbox: BBox): URL {
+  const url = new URL(NOMINATIM_URL);
+  url.searchParams.set("q", "[amenity=fuel]");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set(
+    "viewbox",
+    `${bbox.west},${bbox.north},${bbox.east},${bbox.south}`,
+  );
+  url.searchParams.set("bounded", "1");
+  url.searchParams.set("limit", "50");
+  url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("extratags", "1");
+  return url;
+}
+
+export function parseNominatimFuels(body: unknown): OsmFuel[] {
+  if (!Array.isArray(body)) {
+    return [];
+  }
+  return body.flatMap((row) => {
+    const item = asRecord(row);
+    if (!item) {
+      return [];
+    }
+    const category = asOptionalString(item.category) ?? asOptionalString(item.class);
+    const type = asOptionalString(item.type);
+    if (category && category !== "amenity") {
+      return [];
+    }
+    if (type && type !== "fuel") {
+      return [];
+    }
+    const lat = asFiniteNumber(item.lat);
+    const lon = asFiniteNumber(item.lon);
+    if (lat === undefined || lon === undefined) {
+      return [];
+    }
+    const address = asRecord(item.address) ?? {};
+    const extra = asRecord(item.extratags) ?? {};
+    const city =
+      asOptionalString(address.village) ??
+      asOptionalString(address.town) ??
+      asOptionalString(address.city);
+    return [
+      {
+        lat,
+        lon,
+        name: asOptionalString(item.name),
+        brand:
+          asOptionalString(extra.brand) ?? asOptionalString(extra.operator),
+        address:
+          asOptionalString(address.road) ?? asOptionalString(extra.address),
+        city,
+        postcode: asOptionalString(address.postcode),
+        refPrixId: asOptionalString(extra["ref:FR:prix-carburants"]),
+      },
+    ];
+  });
+}
+
+async function waitNominatimSlot(signal?: AbortSignal): Promise<void> {
+  const wait = NOMINATIM_MIN_INTERVAL_MS - (Date.now() - lastNominatimAt);
+  if (wait <= 0) {
+    lastNominatimAt = Date.now();
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      lastNominatimAt = Date.now();
+      resolve();
+    }, wait);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    if (signal?.aborted) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export async function fetchNominatimFuels(
+  bbox: BBox,
+  options: {
+    signal?: AbortSignal;
+    fetchFn?: typeof fetch;
+  } = {},
+): Promise<OsmFuel[]> {
+  await waitNominatimSlot(options.signal);
+  const fetchFn = options.fetchFn ?? fetch;
+  const response = await fetchFn(nominatimFuelSearchUrl(bbox), {
+    headers: osmHeaders(),
+    signal: withTimeout(options.signal, NOMINATIM_CLIENT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Nominatim HTTP ${response.status}`);
+  }
+  return parseNominatimFuels(await response.json());
+}
+
+export async function fetchOverpassFuels(
+  bbox: BBox,
+  options: {
+    signal?: AbortSignal;
+    fetchFn?: typeof fetch;
+  } = {},
+): Promise<OsmFuel[]> {
+  const fetchFn = options.fetchFn ?? fetch;
+  const response = await fetchFn(OVERPASS_URL, {
+    method: "POST",
+    headers: osmHeaders(),
+    body: new URLSearchParams({ data: overpassFuelQuery(bbox) }),
+    signal: withTimeout(options.signal, OVERPASS_CLIENT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Overpass HTTP ${response.status}`);
+  }
+  return parseOverpassFuels(await response.json());
 }
 
 export async function fetchFuelPoisInBbox(
@@ -376,21 +541,14 @@ export async function fetchFuelPoisInBbox(
     fetchFn?: typeof fetch;
   } = {},
 ): Promise<OsmFuel[]> {
-  const fetchFn = options.fetchFn ?? fetch;
-  const timeout = AbortSignal.timeout(OVERPASS_CLIENT_MS);
-  const signal = options.signal
-    ? AbortSignal.any([options.signal, timeout])
-    : timeout;
-
-  const response = await fetchFn(OVERPASS_URL, {
-    method: "POST",
-    body: new URLSearchParams({ data: overpassFuelQuery(bbox) }),
-    signal,
-  });
-  if (!response.ok) {
-    throw new Error(`Overpass HTTP ${response.status}`);
+  try {
+    return await fetchNominatimFuels(bbox, options);
+  } catch (error) {
+    if (options.signal?.aborted) {
+      throw error;
+    }
+    return fetchOverpassFuels(bbox, options);
   }
-  return parseOverpassFuels(await response.json());
 }
 
 /** Remplit le cache pour les stations encore inconnues. `false` = rien changé ou OSM en échec. */
