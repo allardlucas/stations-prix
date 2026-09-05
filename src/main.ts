@@ -17,6 +17,7 @@ import {
 } from "./domain";
 import { formatDistanceKm, haversineKm, type LatLon } from "./geo";
 import { goLinks } from "./links";
+import { applySnapToVisible, refreshSnaps, type SnapDecision } from "./osm";
 import {
   boundsToBbox,
   debounce,
@@ -52,6 +53,7 @@ let inFlight: AbortController | undefined;
 let map: L.Map | undefined;
 const markers = L.layerGroup();
 const markerById = new Map<string, L.Marker>();
+const snapCache = new Map<string, SnapDecision>();
 
 function setBanner(text: string): void {
   banner.textContent = text;
@@ -60,7 +62,10 @@ function setBanner(text: string): void {
 function visibleStations(now = new Date()): VisibleStation[] {
   return rawStations.flatMap((raw) => {
     const station = visibleStationFromRaw(raw, selectedFuel, now);
-    return station ? [station] : [];
+    if (!station) {
+      return [];
+    }
+    return [applySnapToVisible(station, snapCache.get(station.id))];
   });
 }
 
@@ -137,6 +142,12 @@ function sheetContent(
   const meta = document.createElement("div");
   meta.textContent = `${price} · maj ${age} · ${km}`;
   body.append(place, meta);
+  if (station.snapped) {
+    const hint = document.createElement("div");
+    hint.className = "snap-hint";
+    hint.textContent = "position OSM";
+    body.append(hint);
+  }
   if (station.hours) {
     body.append(hoursBlock(station.hours));
   }
@@ -327,6 +338,15 @@ async function loadViewport(isFirstLoad: boolean): Promise<void> {
     viewportMode = stations.length >= VIEWPORT_LIMIT ? "capped" : "ok";
     lastSuccessfulFetchAt = Date.now();
     renderView();
+    const snapped = await refreshSnaps(stations, bbox, snapCache, {
+      signal: ac.signal,
+    });
+    if (seq !== loadSeq) {
+      return;
+    }
+    if (snapped) {
+      renderView();
+    }
   } catch (error) {
     if (ac.signal.aborted || seq !== loadSeq) {
       return;

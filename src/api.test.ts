@@ -21,6 +21,12 @@ describe("parseRawStation", () => {
     expect(station?.enseigne).toBeUndefined();
     expect(station?.marque).toBeUndefined();
     expect(station?.nom).toBeUndefined();
+    expect(station?.cp).toBeUndefined();
+  });
+
+  it("reads ODS cp when present", () => {
+    expect(parseRawStation({ ...liveRow, cp: "64250" })?.cp).toBe("64250");
+    expect(parseRawStation({ ...liveRow, cp: 64250 })?.cp).toBe("64250");
   });
 
   it("keeps enseigne/marque/nom only when they are strings", () => {
