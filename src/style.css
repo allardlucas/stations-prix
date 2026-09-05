@@ -249,6 +249,12 @@ body,
   font-weight: 650;
 }
 
+.sheet .snap-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .sheet .hours {
   margin-top: 6px;
   color: rgba(255, 255, 255, 0.72);

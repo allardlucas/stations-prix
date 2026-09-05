@@ -49,6 +49,11 @@ export function parseRawStation(value: unknown): RawStation | null {
     geom,
     adresse: asOptionalString(row.adresse),
     ville: asOptionalString(row.ville),
+    cp:
+      asOptionalString(row.cp) ??
+      (typeof row.cp === "number" && Number.isFinite(row.cp)
+        ? String(row.cp)
+        : undefined),
     marque: asOptionalString(row.marque),
     nom: asOptionalString(row.nom),
     enseigne: asOptionalString(row.enseigne),

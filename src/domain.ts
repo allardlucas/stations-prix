@@ -41,6 +41,7 @@ export type RawStation = {
   geom?: { lat?: number; lon?: number } | null;
   adresse?: string | null;
   ville?: string | null;
+  cp?: string | null;
   /** Absents du schéma v2 live (47 champs) — lus seulement s'ils arrivent. */
   marque?: string | null;
   nom?: string | null;
@@ -76,6 +77,8 @@ export type VisibleStation = {
   priceEur: number;
   updatedAt: Date;
   freshness: FreshnessBucket;
+  /** Coords remplacées par un POI OSM `amenity=fuel` (recalage fiable). */
+  snapped?: boolean;
 };
 
 export function visibleStationFromRaw(
