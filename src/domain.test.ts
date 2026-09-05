@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  FRESHNESS_OPACITY,
+  FRESH_PRICE_AGE_MS,
   FUEL_FIELDS,
+  MAX_PRICE_AGE_MS,
   TOP_CHEAPEST,
   cheapestStations,
   formatAge,
-  isFreshPrice,
+  freshnessBucket,
   type RawStation,
   type VisibleStation,
   visibleStationFromRaw,
@@ -29,17 +32,22 @@ const raw: RawStation = {
   e10_maj: "2026-09-05T10:00:00.000Z",
 };
 
-describe("isFreshPrice", () => {
-  it("keeps a price updated exactly 72h ago", () => {
-    expect(isFreshPrice(new Date("2026-09-02T12:00:00.000Z"), now)).toBe(true);
+describe("freshnessBucket", () => {
+  it("is full at or under 24h", () => {
+    expect(freshnessBucket(0)).toBe("full");
+    expect(freshnessBucket(FRESH_PRICE_AGE_MS)).toBe("full");
+    expect(FRESHNESS_OPACITY.full).toBe(1);
   });
 
-  it("hides a price older than 72h", () => {
-    expect(isFreshPrice(new Date("2026-09-02T11:59:00.000Z"), now)).toBe(false);
+  it("is mid after 24h through 72h", () => {
+    expect(freshnessBucket(FRESH_PRICE_AGE_MS + 1)).toBe("mid");
+    expect(freshnessBucket(MAX_PRICE_AGE_MS)).toBe("mid");
+    expect(FRESHNESS_OPACITY.mid).toBe(0.62);
   });
 
-  it("keeps a price updated 24h ago", () => {
-    expect(isFreshPrice(new Date("2026-09-04T12:00:00.000Z"), now)).toBe(true);
+  it("is faint after 72h", () => {
+    expect(freshnessBucket(MAX_PRICE_AGE_MS + 1)).toBe("faint");
+    expect(FRESHNESS_OPACITY.faint).toBe(0.34);
   });
 });
 
@@ -48,6 +56,7 @@ describe("visibleStationFromRaw fuel mapping", () => {
     const station = visibleStationFromRaw(raw, "gazole", now);
     expect(station?.priceEur).toBe(1.749);
     expect(station?.updatedAt.toISOString()).toBe("2026-09-04T10:00:00.000Z");
+    expect(station?.freshness).toBe("mid");
     expect(FUEL_FIELDS.gazole).toEqual({
       price: "gazole_prix",
       updatedAt: "gazole_maj",
@@ -59,15 +68,20 @@ describe("visibleStationFromRaw fuel mapping", () => {
     const station = visibleStationFromRaw(raw, "sp95", now);
     expect(station?.priceEur).toBe(1.689);
     expect(station?.updatedAt.toISOString()).toBe("2026-09-05T08:00:00.000Z");
+    expect(station?.freshness).toBe("full");
   });
 
-  it("keeps sp98 at the 72h boundary", () => {
+  it("keeps sp98 at the 72h boundary as mid", () => {
     const station = visibleStationFromRaw(raw, "sp98", now);
     expect(station?.priceEur).toBe(1.829);
+    expect(station?.freshness).toBe("mid");
   });
 
-  it("hides stale e85 instead of showing it greyed", () => {
-    expect(visibleStationFromRaw(raw, "e85", now)).toBeNull();
+  it("shows stale e85 as faint instead of hiding it", () => {
+    const station = visibleStationFromRaw(raw, "e85", now);
+    expect(station?.priceEur).toBe(0.824);
+    expect(station?.updatedAt.toISOString()).toBe("2026-08-20T17:50:00.000Z");
+    expect(station?.freshness).toBe("faint");
   });
 
   it("reads e10 fields", () => {
@@ -81,14 +95,14 @@ describe("visibleStationFromRaw fuel mapping", () => {
     });
   });
 
-  it("hides stale e10 instead of showing it greyed", () => {
-    expect(
-      visibleStationFromRaw(
-        { ...raw, e10_maj: "2026-09-01T12:00:00.000Z" },
-        "e10",
-        now,
-      ),
-    ).toBeNull();
+  it("shows stale e10 as faint instead of hiding it", () => {
+    const station = visibleStationFromRaw(
+      { ...raw, e10_maj: "2026-09-01T12:00:00.000Z" },
+      "e10",
+      now,
+    );
+    expect(station?.priceEur).toBe(1.654);
+    expect(station?.freshness).toBe("faint");
   });
 
   it("hides a missing price for the selected fuel", () => {
@@ -117,6 +131,7 @@ function station(
     city: "Bayonne",
     fuel: "gazole",
     updatedAt: now,
+    freshness: "full",
     ...partial,
   };
 }
@@ -153,5 +168,21 @@ describe("cheapestStations", () => {
         station({ id: "b", priceEur: 1 }),
       ]).map((row) => row.id),
     ).toEqual(["b", "a"]);
+  });
+
+  it("includes a station older than 72h when it is the cheapest", () => {
+    const stale = station({
+      id: "old",
+      priceEur: 1.2,
+      updatedAt: new Date("2026-08-20T12:00:00.000Z"),
+      freshness: "faint",
+    });
+    const top = cheapestStations([
+      station({ id: "fresh-high", priceEur: 1.9 }),
+      stale,
+      station({ id: "fresh-mid", priceEur: 1.5 }),
+    ]);
+    expect(top[0]).toMatchObject({ id: "old", freshness: "faint" });
+    expect(top.map((row) => row.id)).toEqual(["old", "fresh-mid", "fresh-high"]);
   });
 });

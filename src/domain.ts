@@ -1,10 +1,29 @@
 export const FUELS = ["gazole", "sp95", "sp98", "e85", "e10"] as const;
 export type Fuel = (typeof FUELS)[number];
 
+export const FRESH_PRICE_AGE_MS = 24 * 60 * 60 * 1000;
 export const MAX_PRICE_AGE_MS = 72 * 60 * 60 * 1000;
 
-/** Stations les moins chères dans le viewport déjà filtré ≤72h. */
+export type FreshnessBucket = "full" | "mid" | "faint";
+
+export const FRESHNESS_OPACITY = {
+  full: 1,
+  mid: 0.62,
+  faint: 0.34,
+} as const satisfies Record<FreshnessBucket, number>;
+
+/** Stations les moins chères dans le viewport (tous âges). */
 export const TOP_CHEAPEST = 5;
+
+export function freshnessBucket(ageMs: number): FreshnessBucket {
+  if (ageMs <= FRESH_PRICE_AGE_MS) {
+    return "full";
+  }
+  if (ageMs <= MAX_PRICE_AGE_MS) {
+    return "mid";
+  }
+  return "faint";
+}
 
 export const FUEL_FIELDS = {
   gazole: { price: "gazole_prix", updatedAt: "gazole_maj", label: "Gazole" },
@@ -43,11 +62,8 @@ export type VisibleStation = {
   fuel: Fuel;
   priceEur: number;
   updatedAt: Date;
+  freshness: FreshnessBucket;
 };
-
-export function isFreshPrice(updatedAt: Date, now: Date): boolean {
-  return now.getTime() - updatedAt.getTime() <= MAX_PRICE_AGE_MS;
-}
 
 export function visibleStationFromRaw(
   raw: RawStation,
@@ -76,7 +92,7 @@ export function visibleStationFromRaw(
   }
 
   const updatedAt = new Date(maj);
-  if (Number.isNaN(updatedAt.getTime()) || !isFreshPrice(updatedAt, now)) {
+  if (Number.isNaN(updatedAt.getTime())) {
     return null;
   }
 
@@ -89,6 +105,7 @@ export function visibleStationFromRaw(
     fuel,
     priceEur: price,
     updatedAt,
+    freshness: freshnessBucket(now.getTime() - updatedAt.getTime()),
   };
 }
 
