@@ -14,6 +14,8 @@ npm run dev
 
 Ouvre l'URL Vite affichée, en local `http://localhost:5173`.
 
+En ligne : https://allardlucas.github.io/stations-prix/
+
 ## Données
 
 Flux open data [prix-des-carburants-en-france-flux-instantane-v2](https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records), refresh côté source d'environ 10 min.
