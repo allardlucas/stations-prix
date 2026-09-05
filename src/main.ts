@@ -3,6 +3,7 @@ import "leaflet/dist/leaflet.css";
 import "./style.css";
 import { fetchStationsInBbox } from "./api";
 import {
+  FRESHNESS_OPACITY,
   FUEL_FIELDS,
   FUELS,
   cheapestStations,
@@ -93,6 +94,8 @@ function renderRanking(stations: VisibleStation[], now: Date): void {
     age.className = "age";
     age.textContent = formatAge(station.updatedAt, now);
 
+    button.dataset.freshness = station.freshness;
+    button.style.opacity = String(FRESHNESS_OPACITY[station.freshness]);
     button.append(n, eur, place, age);
     button.addEventListener("click", () => {
       focusedId = station.id;
@@ -117,7 +120,7 @@ function renderPins(stations: VisibleStation[], now: Date): void {
       className: "",
       iconSize: [86, 22],
       iconAnchor: [43, 22],
-      html: `<div class="pin${on ? " is-on" : ""}"><strong>${price}</strong><span>${age}</span></div>`,
+      html: `<div class="pin${on ? " is-on" : ""}" data-freshness="${station.freshness}" style="opacity:${FRESHNESS_OPACITY[station.freshness]}"><strong>${price}</strong><span>${age}</span></div>`,
     });
     const marker = L.marker([station.lat, station.lon], { icon })
       .bindPopup(sheetContent(station, price, age), {
@@ -160,7 +163,7 @@ function renderView(): void {
       ? ` · max ${VIEWPORT_LIMIT}, zoomez pour affiner`
       : "";
   setBanner(
-    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel} · pins = prix ≤72h${cap}`,
+    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel}${cap}`,
   );
 }
 
