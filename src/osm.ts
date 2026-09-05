@@ -502,7 +502,9 @@ export async function fetchNominatimFuels(
     fetchFn?: typeof fetch;
   } = {},
 ): Promise<OsmFuel[]> {
-  await waitNominatimSlot(options.signal);
+  if (!options.fetchFn) {
+    await waitNominatimSlot(options.signal);
+  }
   const fetchFn = options.fetchFn ?? fetch;
   const response = await fetchFn(nominatimFuelSearchUrl(bbox), {
     headers: osmHeaders(),
