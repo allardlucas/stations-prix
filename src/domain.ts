@@ -237,8 +237,13 @@ function formatHorairesLines(horaires: string | null | undefined): string[] {
     items.push({ name, detail: slots.join(", ") });
   }
 
+  const hasOpenHours = items.some((item) => item.detail !== "fermé");
+  const usable = hasOpenHours
+    ? items
+    : items.filter((item) => item.detail !== "fermé");
+
   const groups: { start: string; end: string; detail: string }[] = [];
-  for (const item of items) {
+  for (const item of usable) {
     const last = groups[groups.length - 1];
     if (last && last.detail === item.detail) {
       last.end = item.name;

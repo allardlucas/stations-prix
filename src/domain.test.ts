@@ -226,6 +226,28 @@ describe("hoursFromRaw", () => {
       }),
     ).toBeNull();
   });
+
+  it("does not print fermé for an automate-only station (ODS ferme+01.00 placeholders)", () => {
+    expect(
+      hoursFromRaw({
+        horaires_automate_24_24: "Oui",
+        horaires: JSON.stringify({
+          jour: [
+            {
+              "@nom": "Lundi",
+              "@ferme": "1",
+              horaire: { "@ouverture": "01.00", "@fermeture": "01.00" },
+            },
+            {
+              "@nom": "Dimanche",
+              "@ferme": "1",
+              horaire: { "@ouverture": "01.00", "@fermeture": "01.00" },
+            },
+          ],
+        }),
+      }),
+    ).toEqual({ automate24h: true, lines: [] });
+  });
 });
 
 describe("formatAge", () => {
