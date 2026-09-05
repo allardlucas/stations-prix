@@ -248,8 +248,8 @@ async function start(): Promise<void> {
     13,
   );
   map.zoomControl.setPosition("topright");
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-    attribution: "&copy; OpenStreetMap &copy; CARTO",
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap",
   }).addTo(map);
   L.circleMarker([center.lat, center.lon], {
     radius: 6,

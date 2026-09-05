@@ -155,6 +155,10 @@ body,
   color: #444;
 }
 
+.leaflet-tile-pane {
+  filter: invert(0.92) hue-rotate(180deg) brightness(0.88) saturate(0.35);
+}
+
 .leaflet-div-icon {
   background: none;
   border: 0;
