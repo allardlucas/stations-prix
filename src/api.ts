@@ -1,9 +1,12 @@
 import { type RawStation } from "./domain";
+import {
+  bboxToOdsWhere,
+  type BBox,
+  VIEWPORT_LIMIT,
+} from "./viewport";
 
 export const ODS_RECORDS_URL =
   "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records";
-
-export const SEARCH_RADIUS = "20km";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== "object") {
@@ -57,18 +60,23 @@ export function parseRawStation(value: unknown): RawStation | null {
   };
 }
 
-export async function fetchNearbyStations(
-  lat: number,
-  lon: number,
-): Promise<RawStation[]> {
+export function stationsQueryUrl(
+  bbox: BBox,
+  limit = VIEWPORT_LIMIT,
+): URL {
   const url = new URL(ODS_RECORDS_URL);
-  url.searchParams.set("limit", "100");
-  url.searchParams.set(
-    "where",
-    `within_distance(geom,GEOM'POINT(${lon} ${lat})',${SEARCH_RADIUS})`,
-  );
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("where", bboxToOdsWhere(bbox));
+  return url;
+}
 
-  const response = await fetch(url);
+export async function fetchStationsInBbox(
+  bbox: BBox,
+  options: { signal?: AbortSignal; limit?: number } = {},
+): Promise<RawStation[]> {
+  const url = stationsQueryUrl(bbox, options.limit ?? VIEWPORT_LIMIT);
+
+  const response = await fetch(url, { signal: options.signal });
   if (!response.ok) {
     throw new Error(`ODS HTTP ${response.status}`);
   }
