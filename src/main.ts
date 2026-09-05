@@ -10,14 +10,18 @@ import {
   formatAge,
   formatPrice,
   type Fuel,
+  type HoursInfo,
   type RawStation,
   type VisibleStation,
   visibleStationFromRaw,
 } from "./domain";
+import { formatDistanceKm, haversineKm, type LatLon } from "./geo";
+import { goLinks } from "./links";
 import {
   boundsToBbox,
   debounce,
   isBboxTooWide,
+  shouldRefetchOnVisible,
   VIEWPORT_DEBOUNCE_MS,
   VIEWPORT_LIMIT,
 } from "./viewport";
@@ -40,6 +44,8 @@ let selectedFuel: Fuel = "gazole";
 let focusedId: string | undefined;
 let rawStations: RawStation[] = [];
 let positionLabel = "Bayonne (défaut)";
+let locatedAt: LatLon | undefined;
+let lastSuccessfulFetchAt: number | undefined;
 let viewportMode: "ok" | "capped" | "zoom" = "ok";
 let loadSeq = 0;
 let inFlight: AbortController | undefined;
@@ -58,17 +64,84 @@ function visibleStations(now = new Date()): VisibleStation[] {
   });
 }
 
-function sheetContent(station: VisibleStation, price: string, age: string): HTMLElement {
+function distanceOrigin(): LatLon {
+  if (locatedAt) {
+    return locatedAt;
+  }
+  if (map) {
+    const center = map.getCenter();
+    return { lat: center.lat, lon: center.lng };
+  }
+  return DEFAULT_CENTER;
+}
+
+function goNav(lat: number, lon: number): HTMLElement {
+  const nav = document.createElement("nav");
+  nav.className = "go";
+  nav.setAttribute("aria-label", "Y aller");
+  for (const link of goLinks(lat, lon)) {
+    const a = document.createElement("a");
+    a.href = link.href;
+    a.textContent = link.label;
+    if (link.href.startsWith("http")) {
+      a.target = "_blank";
+      a.rel = "noreferrer";
+    }
+    a.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    nav.append(a);
+  }
+  return nav;
+}
+
+function hoursBlock(hours: HoursInfo): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "hours";
+  if (hours.automate24h) {
+    const automate = document.createElement("div");
+    automate.textContent = "Automate 24h";
+    box.append(automate);
+  }
+  for (const line of hours.lines) {
+    const row = document.createElement("div");
+    row.textContent = line;
+    box.append(row);
+  }
+  return box;
+}
+
+function sheetContent(
+  station: VisibleStation,
+  price: string,
+  age: string,
+  origin: LatLon,
+): HTMLElement {
   const body = document.createElement("div");
+  if (station.brand) {
+    const brand = document.createElement("div");
+    brand.className = "brand";
+    brand.textContent = station.brand;
+    body.append(brand);
+  }
   const place = document.createElement("div");
   place.textContent = [station.address, station.city].filter(Boolean).join(" · ");
+  const km = formatDistanceKm(haversineKm(origin, station));
   const meta = document.createElement("div");
-  meta.textContent = `${price} · maj ${age}`;
+  meta.textContent = `${price} · maj ${age} · ${km}`;
   body.append(place, meta);
+  if (station.hours) {
+    body.append(hoursBlock(station.hours));
+  }
+  body.append(goNav(station.lat, station.lon));
   return body;
 }
 
-function renderRanking(stations: VisibleStation[], now: Date): void {
+function renderRanking(
+  stations: VisibleStation[],
+  now: Date,
+  origin: LatLon,
+): void {
   const top = cheapestStations(stations);
   ranking.replaceChildren();
   ranking.hidden = top.length === 0;
@@ -89,7 +162,9 @@ function renderRanking(stations: VisibleStation[], now: Date): void {
     eur.textContent = formatPrice(station.priceEur);
     const place = document.createElement("span");
     place.className = "place";
-    place.textContent = station.city || station.address || station.id;
+    const label = station.brand || station.city || station.address || station.id;
+    const km = formatDistanceKm(haversineKm(origin, station));
+    place.textContent = `${label} · ${km}`;
     const age = document.createElement("span");
     age.className = "age";
     age.textContent = formatAge(station.updatedAt, now);
@@ -103,12 +178,16 @@ function renderRanking(stations: VisibleStation[], now: Date): void {
       renderView();
       markerById.get(station.id)?.openPopup();
     });
-    item.append(button);
+    item.append(button, goNav(station.lat, station.lon));
     ranking.append(item);
   });
 }
 
-function renderPins(stations: VisibleStation[], now: Date): void {
+function renderPins(
+  stations: VisibleStation[],
+  now: Date,
+  origin: LatLon,
+): void {
   markers.clearLayers();
   markerById.clear();
 
@@ -123,13 +202,13 @@ function renderPins(stations: VisibleStation[], now: Date): void {
       html: `<div class="pin${on ? " is-on" : ""}" data-freshness="${station.freshness}" style="opacity:${FRESHNESS_OPACITY[station.freshness]}"><strong>${price}</strong><span>${age}</span></div>`,
     });
     const marker = L.marker([station.lat, station.lon], { icon })
-      .bindPopup(sheetContent(station, price, age), {
+      .bindPopup(sheetContent(station, price, age, origin), {
         className: "sheet",
         closeButton: false,
       })
       .on("click", () => {
         focusedId = station.id;
-        renderRanking(stations, now);
+        renderRanking(stations, now, origin);
       });
     marker.addTo(markers);
     markerById.set(station.id, marker);
@@ -155,8 +234,9 @@ function renderView(): void {
     focusedId = undefined;
   }
 
-  renderPins(stations, now);
-  renderRanking(stations, now);
+  const origin = distanceOrigin();
+  renderPins(stations, now, origin);
+  renderRanking(stations, now, origin);
 
   const cap =
     viewportMode === "capped"
@@ -192,8 +272,13 @@ async function locate(): Promise<{ lat: number; lon: number }> {
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        const here = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        };
+        locatedAt = here;
         positionLabel = "votre position";
-        resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+        resolve(here);
       },
       () => resolve(DEFAULT_CENTER),
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 60_000 },
@@ -233,6 +318,7 @@ async function loadViewport(isFirstLoad: boolean): Promise<void> {
     }
     rawStations = stations;
     viewportMode = stations.length >= VIEWPORT_LIMIT ? "capped" : "ok";
+    lastSuccessfulFetchAt = Date.now();
     renderView();
   } catch (error) {
     if (ac.signal.aborted || seq !== loadSeq) {
@@ -268,6 +354,16 @@ async function start(): Promise<void> {
     void loadViewport(false);
   }, VIEWPORT_DEBOUNCE_MS);
   map.on("moveend", onMoveEnd);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    if (!shouldRefetchOnVisible(lastSuccessfulFetchAt, Date.now())) {
+      return;
+    }
+    void loadViewport(false);
+  });
 }
 
 void start();

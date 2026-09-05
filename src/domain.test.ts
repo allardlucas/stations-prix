@@ -5,9 +5,11 @@ import {
   FUEL_FIELDS,
   MAX_PRICE_AGE_MS,
   TOP_CHEAPEST,
+  brandName,
   cheapestStations,
   formatAge,
   freshnessBucket,
+  hoursFromRaw,
   type RawStation,
   type VisibleStation,
   visibleStationFromRaw,
@@ -110,6 +112,142 @@ describe("visibleStationFromRaw fuel mapping", () => {
       visibleStationFromRaw({ ...raw, gazole_prix: null }, "gazole", now),
     ).toBeNull();
   });
+
+  it("passes through enseigne/nom when ODS sends them, else empty", () => {
+    expect(visibleStationFromRaw(raw, "gazole", now)?.brand).toBe("");
+    expect(
+      visibleStationFromRaw(
+        { ...raw, enseigne: "TotalEnergies", nom: "Station Bayonne" },
+        "gazole",
+        now,
+      )?.brand,
+    ).toBe("TotalEnergies · Station Bayonne");
+  });
+
+  it("keeps hours only when ODS has automate or real slots", () => {
+    expect(visibleStationFromRaw(raw, "gazole", now)?.hours).toBeNull();
+    expect(
+      visibleStationFromRaw(
+        { ...raw, horaires_automate_24_24: "Oui" },
+        "gazole",
+        now,
+      )?.hours,
+    ).toEqual({ automate24h: true, lines: [] });
+  });
+});
+
+describe("brandName", () => {
+  it("returns empty when ODS has no enseigne/marque/nom", () => {
+    expect(brandName({})).toBe("");
+    expect(brandName({ enseigne: null, marque: "  ", nom: "" })).toBe("");
+  });
+
+  it("joins distinct enseigne then marque then nom", () => {
+    expect(
+      brandName({ enseigne: "Total", marque: "Total", nom: "Aire des Landes" }),
+    ).toBe("Total · Aire des Landes");
+  });
+});
+
+describe("hoursFromRaw", () => {
+  it("returns null when automate is not Oui and horaires are empty", () => {
+    expect(hoursFromRaw({})).toBeNull();
+    expect(hoursFromRaw({ horaires_automate_24_24: "Non" })).toBeNull();
+    expect(
+      hoursFromRaw({
+        horaires_automate_24_24: "Non",
+        horaires:
+          '{"@automate-24-24":"","jour":[{"@id":"1","@nom":"Lundi","@ferme":""}]}',
+      }),
+    ).toBeNull();
+  });
+
+  it("does not invent hours from invalid JSON", () => {
+    expect(hoursFromRaw({ horaires: "{not-json" })).toBeNull();
+  });
+
+  it("shows automate 24h from horaires_automate_24_24 = Oui", () => {
+    expect(hoursFromRaw({ horaires_automate_24_24: "Oui" })).toEqual({
+      automate24h: true,
+      lines: [],
+    });
+  });
+
+  it("groups real ODS slots and marks an explicit closed day", () => {
+    expect(
+      hoursFromRaw({
+        horaires_automate_24_24: "Oui",
+        horaires: JSON.stringify({
+          "@automate-24-24": "1",
+          jour: [
+            {
+              "@id": "1",
+              "@nom": "Lundi",
+              "@ferme": "",
+              horaire: { "@ouverture": "07.00", "@fermeture": "19.30" },
+            },
+            {
+              "@id": "2",
+              "@nom": "Mardi",
+              "@ferme": "",
+              horaire: { "@ouverture": "07.00", "@fermeture": "19.30" },
+            },
+            {
+              "@id": "6",
+              "@nom": "Samedi",
+              "@ferme": "",
+              horaire: [
+                { "@ouverture": "08.30", "@fermeture": "13.30" },
+                { "@ouverture": "00.00", "@fermeture": "00.00" },
+              ],
+            },
+            { "@id": "7", "@nom": "Dimanche", "@ferme": "1" },
+          ],
+        }),
+      }),
+    ).toEqual({
+      automate24h: true,
+      lines: ["Lun–Mar 07h00–19h30", "Sam 08h30–13h30", "Dim fermé"],
+    });
+  });
+
+  it("skips equal open/close placeholders such as 01.00–01.00", () => {
+    expect(
+      hoursFromRaw({
+        horaires: JSON.stringify({
+          jour: [
+            {
+              "@nom": "Lundi",
+              "@ferme": "",
+              horaire: { "@ouverture": "01.00", "@fermeture": "01.00" },
+            },
+          ],
+        }),
+      }),
+    ).toBeNull();
+  });
+
+  it("does not print fermé for an automate-only station (ODS ferme+01.00 placeholders)", () => {
+    expect(
+      hoursFromRaw({
+        horaires_automate_24_24: "Oui",
+        horaires: JSON.stringify({
+          jour: [
+            {
+              "@nom": "Lundi",
+              "@ferme": "1",
+              horaire: { "@ouverture": "01.00", "@fermeture": "01.00" },
+            },
+            {
+              "@nom": "Dimanche",
+              "@ferme": "1",
+              horaire: { "@ouverture": "01.00", "@fermeture": "01.00" },
+            },
+          ],
+        }),
+      }),
+    ).toEqual({ automate24h: true, lines: [] });
+  });
 });
 
 describe("formatAge", () => {
@@ -129,6 +267,8 @@ function station(
     lon: -1.47,
     address: "",
     city: "Bayonne",
+    brand: "",
+    hours: null,
     fuel: "gazole",
     updatedAt: now,
     freshness: "full",

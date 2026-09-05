@@ -10,6 +10,20 @@ export const VIEWPORT_LIMIT = 100;
 
 export const VIEWPORT_DEBOUNCE_MS = 400;
 
+/** Refetch à la reprise d'onglet si le dernier fetch réussi dépasse ça. Pas de poll. */
+export const VIEWPORT_STALE_MS = 3 * 60 * 1000;
+
+export function shouldRefetchOnVisible(
+  lastSuccessfulFetchAt: number | undefined,
+  nowMs: number,
+  staleMs = VIEWPORT_STALE_MS,
+): boolean {
+  if (lastSuccessfulFetchAt === undefined) {
+    return false;
+  }
+  return nowMs - lastSuccessfulFetchAt > staleMs;
+}
+
 /** ~111 km en latitude, ~80 km en longitude à 43° N. */
 export const MAX_BBOX_SPAN_DEG = 1;
 

@@ -6,7 +6,9 @@ import {
   debounce,
   isBboxTooWide,
   MAX_BBOX_SPAN_DEG,
+  shouldRefetchOnVisible,
   VIEWPORT_LIMIT,
+  VIEWPORT_STALE_MS,
 } from "./viewport";
 
 const bayonne: {
@@ -75,6 +77,22 @@ describe("isBboxTooWide", () => {
 
   it("uses the documented span threshold", () => {
     expect(MAX_BBOX_SPAN_DEG).toBe(1);
+  });
+});
+
+describe("shouldRefetchOnVisible", () => {
+  it("does not refetch when no fetch has succeeded", () => {
+    expect(shouldRefetchOnVisible(undefined, 10_000)).toBe(false);
+  });
+
+  it("does not refetch at or under the stale window", () => {
+    expect(shouldRefetchOnVisible(0, VIEWPORT_STALE_MS)).toBe(false);
+    expect(shouldRefetchOnVisible(1_000, 1_000 + VIEWPORT_STALE_MS)).toBe(false);
+  });
+
+  it("refetches only after more than ~3 min", () => {
+    expect(VIEWPORT_STALE_MS).toBe(3 * 60 * 1000);
+    expect(shouldRefetchOnVisible(0, VIEWPORT_STALE_MS + 1)).toBe(true);
   });
 });
 
