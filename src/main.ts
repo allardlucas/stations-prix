@@ -1,7 +1,7 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
-import { fetchNearbyStations } from "./api";
+import { fetchStationsInBbox } from "./api";
 import {
   FUEL_FIELDS,
   FUELS,
@@ -12,6 +12,13 @@ import {
   type VisibleStation,
   visibleStationFromRaw,
 } from "./domain";
+import {
+  boundsToBbox,
+  debounce,
+  isBboxTooWide,
+  VIEWPORT_DEBOUNCE_MS,
+  VIEWPORT_LIMIT,
+} from "./viewport";
 
 const DEFAULT_CENTER = { lat: 43.49, lon: -1.47 };
 
@@ -29,6 +36,9 @@ const fuelsNav = requireElement("fuels");
 let selectedFuel: Fuel = "gazole";
 let rawStations: RawStation[] = [];
 let positionLabel = "Bayonne (défaut)";
+let viewportMode: "ok" | "capped" | "zoom" = "ok";
+let loadSeq = 0;
+let inFlight: AbortController | undefined;
 const markers = L.layerGroup();
 
 function setBanner(text: string): void {
@@ -43,6 +53,14 @@ function visibleStations(now = new Date()): VisibleStation[] {
 }
 
 function renderPins(): void {
+  const fuel = FUEL_FIELDS[selectedFuel].label;
+
+  if (viewportMode === "zoom") {
+    markers.clearLayers();
+    setBanner(`Zoomez pour afficher les stations · ${fuel}`);
+    return;
+  }
+
   const now = new Date();
   const stations = visibleStations(now);
   markers.clearLayers();
@@ -63,9 +81,12 @@ function renderPins(): void {
       .addTo(markers);
   }
 
-  const fuel = FUEL_FIELDS[selectedFuel].label;
+  const cap =
+    viewportMode === "capped"
+      ? ` · max ${VIEWPORT_LIMIT}, zoomez pour affiner`
+      : "";
   setBanner(
-    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel} · pins = prix ≤72h`,
+    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel} · pins = prix ≤72h${cap}`,
   );
 }
 
@@ -102,6 +123,44 @@ async function locate(): Promise<{ lat: number; lon: number }> {
   });
 }
 
+async function loadViewport(map: L.Map, isFirstLoad: boolean): Promise<void> {
+  const seq = ++loadSeq;
+  inFlight?.abort();
+  const ac = new AbortController();
+  inFlight = ac;
+
+  const bbox = boundsToBbox(map.getBounds());
+  if (isBboxTooWide(bbox)) {
+    if (seq !== loadSeq) {
+      return;
+    }
+    rawStations = [];
+    viewportMode = "zoom";
+    renderPins();
+    return;
+  }
+
+  if (isFirstLoad) {
+    setBanner(`Chargement des prix autour de ${positionLabel}…`);
+  }
+
+  try {
+    const stations = await fetchStationsInBbox(bbox, { signal: ac.signal });
+    if (seq !== loadSeq) {
+      return;
+    }
+    rawStations = stations;
+    viewportMode = stations.length >= VIEWPORT_LIMIT ? "capped" : "ok";
+    renderPins();
+  } catch (error) {
+    if (ac.signal.aborted || seq !== loadSeq) {
+      return;
+    }
+    const message = error instanceof Error ? error.message : "erreur réseau";
+    setBanner(`Impossible de charger les prix (${message}).`);
+  }
+}
+
 async function start(): Promise<void> {
   renderFuelButtons();
   const center = await locate();
@@ -120,14 +179,13 @@ async function start(): Promise<void> {
   }).addTo(map);
   markers.addTo(map);
 
-  setBanner(`Chargement des prix autour de ${positionLabel}…`);
-  try {
-    rawStations = await fetchNearbyStations(center.lat, center.lon);
-    renderPins();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "erreur réseau";
-    setBanner(`Impossible de charger les prix (${message}).`);
-  }
+  await loadViewport(map, true);
+
+  const onMoveEnd = debounce(() => {
+    positionLabel = "zone visible";
+    void loadViewport(map, false);
+  }, VIEWPORT_DEBOUNCE_MS);
+  map.on("moveend", onMoveEnd);
 }
 
 void start();
