@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   FUEL_FIELDS,
+  TOP_CHEAPEST,
+  cheapestStations,
   formatAge,
   isFreshPrice,
   type RawStation,
+  type VisibleStation,
   visibleStationFromRaw,
 } from "./domain";
 
@@ -22,6 +25,8 @@ const raw: RawStation = {
   sp98_maj: "2026-09-02T12:00:00.000Z",
   e85_prix: 0.824,
   e85_maj: "2026-08-20T17:50:00.000Z",
+  e10_prix: 1.654,
+  e10_maj: "2026-09-05T10:00:00.000Z",
 };
 
 describe("isFreshPrice", () => {
@@ -65,6 +70,27 @@ describe("visibleStationFromRaw fuel mapping", () => {
     expect(visibleStationFromRaw(raw, "e85", now)).toBeNull();
   });
 
+  it("reads e10 fields", () => {
+    const station = visibleStationFromRaw(raw, "e10", now);
+    expect(station?.priceEur).toBe(1.654);
+    expect(station?.updatedAt.toISOString()).toBe("2026-09-05T10:00:00.000Z");
+    expect(FUEL_FIELDS.e10).toEqual({
+      price: "e10_prix",
+      updatedAt: "e10_maj",
+      label: "E10",
+    });
+  });
+
+  it("hides stale e10 instead of showing it greyed", () => {
+    expect(
+      visibleStationFromRaw(
+        { ...raw, e10_maj: "2026-09-01T12:00:00.000Z" },
+        "e10",
+        now,
+      ),
+    ).toBeNull();
+  });
+
   it("hides a missing price for the selected fuel", () => {
     expect(
       visibleStationFromRaw({ ...raw, gazole_prix: null }, "gazole", now),
@@ -77,5 +103,55 @@ describe("formatAge", () => {
     expect(formatAge(new Date("2026-09-05T11:40:00.000Z"), now)).toBe("20 min");
     expect(formatAge(new Date("2026-09-05T09:00:00.000Z"), now)).toBe("3 h");
     expect(formatAge(new Date("2026-09-03T12:00:00.000Z"), now)).toBe("2 j");
+  });
+});
+
+function station(
+  partial: Pick<VisibleStation, "id" | "priceEur"> &
+    Partial<VisibleStation>,
+): VisibleStation {
+  return {
+    lat: 43.5,
+    lon: -1.47,
+    address: "",
+    city: "Bayonne",
+    fuel: "gazole",
+    updatedAt: now,
+    ...partial,
+  };
+}
+
+describe("cheapestStations", () => {
+  it("caps at TOP_CHEAPEST = 5", () => {
+    expect(TOP_CHEAPEST).toBe(5);
+  });
+
+  it("sorts VisibleStation[] by price and keeps only the top N", () => {
+    const input = [
+      station({ id: "a", priceEur: 1.9 }),
+      station({ id: "b", priceEur: 1.5 }),
+      station({ id: "c", priceEur: 1.7 }),
+      station({ id: "d", priceEur: 1.4 }),
+      station({ id: "e", priceEur: 1.8 }),
+      station({ id: "f", priceEur: 1.6 }),
+    ];
+    const snapshot = input.map((row) => row.id);
+    expect(cheapestStations(input).map((row) => row.id)).toEqual([
+      "d",
+      "b",
+      "f",
+      "c",
+      "e",
+    ]);
+    expect(input.map((row) => row.id)).toEqual(snapshot);
+  });
+
+  it("returns fewer than N when the viewport has fewer stations", () => {
+    expect(
+      cheapestStations([
+        station({ id: "a", priceEur: 2 }),
+        station({ id: "b", priceEur: 1 }),
+      ]).map((row) => row.id),
+    ).toEqual(["b", "a"]);
   });
 });

@@ -1,13 +1,17 @@
-export const FUELS = ["gazole", "sp95", "sp98", "e85"] as const;
+export const FUELS = ["gazole", "sp95", "sp98", "e85", "e10"] as const;
 export type Fuel = (typeof FUELS)[number];
 
 export const MAX_PRICE_AGE_MS = 72 * 60 * 60 * 1000;
+
+/** Stations les moins chères dans le viewport déjà filtré ≤72h. */
+export const TOP_CHEAPEST = 5;
 
 export const FUEL_FIELDS = {
   gazole: { price: "gazole_prix", updatedAt: "gazole_maj", label: "Gazole" },
   sp95: { price: "sp95_prix", updatedAt: "sp95_maj", label: "SP95" },
   sp98: { price: "sp98_prix", updatedAt: "sp98_maj", label: "SP98" },
   e85: { price: "e85_prix", updatedAt: "e85_maj", label: "E85" },
+  e10: { price: "e10_prix", updatedAt: "e10_maj", label: "E10" },
 } as const satisfies Record<
   Fuel,
   { price: string; updatedAt: string; label: string }
@@ -26,6 +30,8 @@ export type RawStation = {
   sp98_maj?: string | null;
   e85_prix?: number | null;
   e85_maj?: string | null;
+  e10_prix?: number | null;
+  e10_maj?: string | null;
 };
 
 export type VisibleStation = {
@@ -105,4 +111,13 @@ export function formatAge(updatedAt: Date, now: Date): string {
 
 export function formatPrice(priceEur: number): string {
   return `${priceEur.toFixed(3).replace(".", ",")} €`;
+}
+
+export function cheapestStations(
+  stations: readonly VisibleStation[],
+  n = TOP_CHEAPEST,
+): VisibleStation[] {
+  return [...stations]
+    .sort((a, b) => a.priceEur - b.priceEur || a.id.localeCompare(b.id))
+    .slice(0, n);
 }

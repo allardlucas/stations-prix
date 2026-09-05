@@ -6,13 +6,18 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0b0d10" />
     <title>Stations-prix</title>
   </head>
   <body>
     <div id="app">
-      <header id="banner" class="banner">Chargement…</header>
+      <header class="chrome">
+        <nav id="fuels" class="chips" aria-label="Carburant"></nav>
+        <p id="banner" class="status">Chargement…</p>
+      </header>
       <div id="map"></div>
-      <nav id="fuels" class="fuels" aria-label="Carburant"></nav>
+      <ol id="ranking" class="ranking" hidden></ol>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

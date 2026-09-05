@@ -57,6 +57,8 @@ export function parseRawStation(value: unknown): RawStation | null {
     sp98_maj: asOptionalString(row.sp98_maj) ?? null,
     e85_prix: asFiniteNumber(row.e85_prix) ?? null,
     e85_maj: asOptionalString(row.e85_maj) ?? null,
+    e10_prix: asFiniteNumber(row.e10_prix) ?? null,
+    e10_maj: asOptionalString(row.e10_maj) ?? null,
   };
 }
 

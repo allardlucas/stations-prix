@@ -5,6 +5,7 @@ import { fetchStationsInBbox } from "./api";
 import {
   FUEL_FIELDS,
   FUELS,
+  cheapestStations,
   formatAge,
   formatPrice,
   type Fuel,
@@ -32,14 +33,18 @@ function requireElement(id: string): HTMLElement {
 
 const banner = requireElement("banner");
 const fuelsNav = requireElement("fuels");
+const ranking = requireElement("ranking");
 
 let selectedFuel: Fuel = "gazole";
+let focusedId: string | undefined;
 let rawStations: RawStation[] = [];
 let positionLabel = "Bayonne (défaut)";
 let viewportMode: "ok" | "capped" | "zoom" = "ok";
 let loadSeq = 0;
 let inFlight: AbortController | undefined;
+let map: L.Map | undefined;
 const markers = L.layerGroup();
+const markerById = new Map<string, L.Marker>();
 
 function setBanner(text: string): void {
   banner.textContent = text;
@@ -52,34 +57,103 @@ function visibleStations(now = new Date()): VisibleStation[] {
   });
 }
 
-function renderPins(): void {
+function sheetContent(station: VisibleStation, price: string, age: string): HTMLElement {
+  const body = document.createElement("div");
+  const place = document.createElement("div");
+  place.textContent = [station.address, station.city].filter(Boolean).join(" · ");
+  const meta = document.createElement("div");
+  meta.textContent = `${price} · maj ${age}`;
+  body.append(place, meta);
+  return body;
+}
+
+function renderRanking(stations: VisibleStation[], now: Date): void {
+  const top = cheapestStations(stations);
+  ranking.replaceChildren();
+  ranking.hidden = top.length === 0;
+
+  top.forEach((station, index) => {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    if (station.id === focusedId) {
+      button.setAttribute("aria-current", "true");
+    }
+
+    const n = document.createElement("span");
+    n.className = "n";
+    n.textContent = String(index + 1);
+    const eur = document.createElement("span");
+    eur.className = "eur";
+    eur.textContent = formatPrice(station.priceEur);
+    const place = document.createElement("span");
+    place.className = "place";
+    place.textContent = station.city || station.address || station.id;
+    const age = document.createElement("span");
+    age.className = "age";
+    age.textContent = formatAge(station.updatedAt, now);
+
+    button.append(n, eur, place, age);
+    button.addEventListener("click", () => {
+      focusedId = station.id;
+      map?.setView([station.lat, station.lon]);
+      renderView();
+      markerById.get(station.id)?.openPopup();
+    });
+    item.append(button);
+    ranking.append(item);
+  });
+}
+
+function renderPins(stations: VisibleStation[], now: Date): void {
+  markers.clearLayers();
+  markerById.clear();
+
+  for (const station of stations) {
+    const age = formatAge(station.updatedAt, now);
+    const price = formatPrice(station.priceEur);
+    const on = station.id === focusedId;
+    const icon = L.divIcon({
+      className: "",
+      iconSize: [86, 22],
+      iconAnchor: [43, 22],
+      html: `<div class="pin${on ? " is-on" : ""}"><strong>${price}</strong><span>${age}</span></div>`,
+    });
+    const marker = L.marker([station.lat, station.lon], { icon })
+      .bindPopup(sheetContent(station, price, age), {
+        className: "sheet",
+        closeButton: false,
+      })
+      .on("click", () => {
+        focusedId = station.id;
+        renderRanking(stations, now);
+      });
+    marker.addTo(markers);
+    markerById.set(station.id, marker);
+  }
+}
+
+function renderView(): void {
   const fuel = FUEL_FIELDS[selectedFuel].label;
 
   if (viewportMode === "zoom") {
+    focusedId = undefined;
     markers.clearLayers();
+    markerById.clear();
+    ranking.replaceChildren();
+    ranking.hidden = true;
     setBanner(`Zoomez pour afficher les stations · ${fuel}`);
     return;
   }
 
   const now = new Date();
   const stations = visibleStations(now);
-  markers.clearLayers();
-
-  for (const station of stations) {
-    const age = formatAge(station.updatedAt, now);
-    const price = formatPrice(station.priceEur);
-    const icon = L.divIcon({
-      className: "",
-      iconSize: [72, 36],
-      iconAnchor: [36, 36],
-      html: `<div class="pin"><strong>${price}</strong><span>${age}</span></div>`,
-    });
-    L.marker([station.lat, station.lon], { icon })
-      .bindPopup(
-        `${station.address}<br>${station.city}<br>${price}<br>Maj ${age}`,
-      )
-      .addTo(markers);
+  if (focusedId && !stations.some((station) => station.id === focusedId)) {
+    focusedId = undefined;
   }
+
+  renderPins(stations, now);
+  renderRanking(stations, now);
 
   const cap =
     viewportMode === "capped"
@@ -99,8 +173,9 @@ function renderFuelButtons(): void {
     button.setAttribute("aria-pressed", String(fuel === selectedFuel));
     button.addEventListener("click", () => {
       selectedFuel = fuel;
+      focusedId = undefined;
       renderFuelButtons();
-      renderPins();
+      renderView();
     });
     fuelsNav.append(button);
   }
@@ -123,7 +198,11 @@ async function locate(): Promise<{ lat: number; lon: number }> {
   });
 }
 
-async function loadViewport(map: L.Map, isFirstLoad: boolean): Promise<void> {
+async function loadViewport(isFirstLoad: boolean): Promise<void> {
+  if (!map) {
+    return;
+  }
+
   const seq = ++loadSeq;
   inFlight?.abort();
   const ac = new AbortController();
@@ -136,7 +215,7 @@ async function loadViewport(map: L.Map, isFirstLoad: boolean): Promise<void> {
     }
     rawStations = [];
     viewportMode = "zoom";
-    renderPins();
+    renderView();
     return;
   }
 
@@ -151,7 +230,7 @@ async function loadViewport(map: L.Map, isFirstLoad: boolean): Promise<void> {
     }
     rawStations = stations;
     viewportMode = stations.length >= VIEWPORT_LIMIT ? "capped" : "ok";
-    renderPins();
+    renderView();
   } catch (error) {
     if (ac.signal.aborted || seq !== loadSeq) {
       return;
@@ -164,26 +243,26 @@ async function loadViewport(map: L.Map, isFirstLoad: boolean): Promise<void> {
 async function start(): Promise<void> {
   renderFuelButtons();
   const center = await locate();
-  const map = L.map("map", { zoomControl: true }).setView(
+  map = L.map("map", { zoomControl: true }).setView(
     [center.lat, center.lon],
     13,
   );
-  map.zoomControl.setPosition("bottomright");
+  map.zoomControl.setPosition("topright");
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap",
   }).addTo(map);
   L.circleMarker([center.lat, center.lon], {
     radius: 6,
-    color: "#0a58ca",
+    color: "#d7dde8",
     fillOpacity: 0.9,
   }).addTo(map);
   markers.addTo(map);
 
-  await loadViewport(map, true);
+  await loadViewport(true);
 
   const onMoveEnd = debounce(() => {
     positionLabel = "zone visible";
-    void loadViewport(map, false);
+    void loadViewport(false);
   }, VIEWPORT_DEBOUNCE_MS);
   map.on("moveend", onMoveEnd);
 }
