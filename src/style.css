@@ -1,6 +1,8 @@
 :root {
-  color: #111;
+  color: #ececec;
+  color-scheme: dark;
   font-family: system-ui, sans-serif;
+  background: #0b0d10;
 }
 
 * {
@@ -16,68 +18,195 @@ body,
   margin: 0;
 }
 
-.banner {
+.chrome {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 500;
-  padding: 10px 12px;
-  padding-top: max(10px, env(safe-area-inset-top));
-  background: rgba(17, 17, 17, 0.88);
-  color: #fff;
-  font-size: 13px;
-  line-height: 1.35;
+  padding: 8px 10px 7px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: rgba(12, 14, 18, 0.62);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
-.fuels {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: max(12px, env(safe-area-inset-bottom));
-  z-index: 500;
+.chips {
   display: flex;
   gap: 6px;
 }
 
-.fuels button {
+.chips button {
   flex: 1;
-  min-height: 44px;
-  border: 0;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8e8ea;
   font: inherit;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.fuels button[aria-pressed="true"] {
-  background: #111;
-  color: #fff;
+.chips button[aria-pressed="true"] {
+  background: #f3f3f4;
+  color: #111;
+  border-color: #f3f3f4;
+}
+
+.status {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.ranking {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 500;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: rgba(12, 14, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.ranking button {
+  display: grid;
+  grid-template-columns: 1.2em 5.6em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+
+.ranking button[aria-current="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ranking .n {
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking .eur {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.ranking .place {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.ranking .age {
+  color: rgba(255, 255, 255, 0.45);
 }
 
 .pin {
-  background: #fff;
-  border: 1px solid #111;
-  border-radius: 8px;
-  padding: 2px 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(16, 18, 22, 0.92);
+  color: #f4f4f5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
   white-space: nowrap;
-  text-align: center;
   line-height: 1.15;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .pin strong {
-  display: block;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .pin span {
-  font-size: 11px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.pin.is-on {
+  background: #f3f3f4;
+  color: #111;
+  border-color: #f3f3f4;
+}
+
+.pin.is-on span {
   color: #444;
 }
 
 .leaflet-div-icon {
   background: none;
   border: 0;
+}
+
+.leaflet-top {
+  top: 86px;
+}
+
+.leaflet-bar {
+  border: 0;
+  box-shadow: none;
+}
+
+.leaflet-bar a {
+  background: rgba(16, 18, 22, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  color: #f3f3f4;
+}
+
+.leaflet-bar a:hover,
+.leaflet-bar a:focus {
+  background: #1c1f26;
+  color: #fff;
+}
+
+.leaflet-control-attribution {
+  background: rgba(12, 14, 18, 0.55);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.leaflet-control-attribution a {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.sheet .leaflet-popup-content-wrapper {
+  background: rgba(16, 18, 22, 0.94);
+  color: #ececec;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.sheet .leaflet-popup-tip {
+  background: rgba(16, 18, 22, 0.94);
+}
+
+.sheet .leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: rgba(255, 255, 255, 0.55);
 }

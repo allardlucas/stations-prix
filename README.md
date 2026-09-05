@@ -29,7 +29,7 @@ Si la bbox dépasse 1° de lat ou lon (~80–110 km), aucun fetch : le bandeau d
 ## Vérifier à la main
 
 1. Autorise la géoloc. La carte se centre sur toi et le bandeau dit `votre position`. Refuse la géoloc. Le bandeau dit `Bayonne (défaut)`.
-2. Choisis Gazole, puis SP95, SP98, E85. Les pins changent. Une station sans prix frais pour ce carburant disparaît.
+2. Choisis Gazole, puis SP95, SP98, E85, E10. Les pins et la liste bas changent. Une station sans prix frais pour ce carburant disparaît (pas grisée).
 3. Chaque pin montre un prix et un âge (`12 min`, `3 h`, `2 j`). Le bandeau répète `pins = prix ≤72h`.
-4. Aucun pin ne montre un prix plus vieux que 72 h. Pour le prouver hors carte, lance `npm test` (cas E85 du 20 août masqué au 5 septembre).
-5. Déplace la carte hors Pays Basque : d’autres pins apparaissent. Change de carburant. Dézoome trop loin : plus de pins, bandeau « Zoomez pour afficher les stations ».
+4. Aucun pin ne montre un prix plus vieux que 72 h. Pour le prouver hors carte, lance `npm test` (cas E85 du 20 août masqué au 5 septembre ; E10 stale aussi).
+5. Déplace la carte hors Pays Basque : d’autres pins apparaissent, la liste top 5 se recalcule sur le viewport. Change de carburant. Tape une ligne : le pin se centre. Dézoome trop loin : plus de pins ni de liste, bandeau « Zoomez pour afficher les stations ».
