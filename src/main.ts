@@ -75,11 +75,18 @@ function distanceOrigin(): LatLon {
   return DEFAULT_CENTER;
 }
 
-function goNav(lat: number, lon: number): HTMLElement {
+function goNav(
+  station: Pick<VisibleStation, "lat" | "lon" | "address" | "city">,
+): HTMLElement {
   const nav = document.createElement("nav");
   nav.className = "go";
   nav.setAttribute("aria-label", "Y aller");
-  for (const link of goLinks(lat, lon)) {
+  for (const link of goLinks(
+    station.lat,
+    station.lon,
+    station.address,
+    station.city,
+  )) {
     const a = document.createElement("a");
     a.href = link.href;
     a.textContent = link.label;
@@ -133,7 +140,7 @@ function sheetContent(
   if (station.hours) {
     body.append(hoursBlock(station.hours));
   }
-  body.append(goNav(station.lat, station.lon));
+  body.append(goNav(station));
   return body;
 }
 
@@ -178,7 +185,7 @@ function renderRanking(
       renderView();
       markerById.get(station.id)?.openPopup();
     });
-    item.append(button, goNav(station.lat, station.lon));
+    item.append(button, goNav(station));
     ranking.append(item);
   });
 }
