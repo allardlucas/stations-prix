@@ -50,6 +50,7 @@ import {
   type PanelsState,
 } from "./panels";
 import { PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
+import { layoutPins } from "./pinLayout";
 import { MAP_TILE_OPTIONS, USER_DOT } from "./tiles";
 import {
   boundsToBbox,
@@ -401,6 +402,28 @@ function renderRanking(
   return top.length;
 }
 
+function pinScreenPoint(station: Pick<VisibleStation, "lat" | "lon">): {
+  x: number;
+  y: number;
+} {
+  if (!map) {
+    return { x: 0, y: 0 };
+  }
+  return map.latLngToLayerPoint([station.lat, station.lon]);
+}
+
+function pinDisplayLatLng(
+  station: Pick<VisibleStation, "lat" | "lon">,
+  dx: number,
+  dy: number,
+): L.LatLngExpression {
+  if (!map || (dx === 0 && dy === 0)) {
+    return [station.lat, station.lon];
+  }
+  const origin = map.latLngToLayerPoint([station.lat, station.lon]);
+  return map.layerPointToLatLng(L.point(origin.x + dx, origin.y + dy));
+}
+
 function renderPins(
   stations: VisibleStation[],
   now: Date,
@@ -409,7 +432,24 @@ function renderPins(
   markers.clearLayers();
   markerById.clear();
 
+  const placements = layoutPins(
+    stations.map((station) => {
+      const point = pinScreenPoint(station);
+      return {
+        id: station.id,
+        x: point.x,
+        y: point.y,
+        rank: station.id === focusedId ? -1 : station.priceEur,
+      };
+    }),
+  );
+  const placeById = new Map(placements.map((place) => [place.id, place]));
+
   for (const station of stations) {
+    const place = placeById.get(station.id);
+    if (!place || place.hidden) {
+      continue;
+    }
     const age = formatAge(station.updatedAt, now);
     const price = formatPrice(station.priceEur);
     const on = station.id === focusedId;
@@ -426,7 +466,10 @@ function renderPins(
         selected: on,
       }),
     });
-    const marker = L.marker([station.lat, station.lon], { icon })
+    const marker = L.marker(pinDisplayLatLng(station, place.dx, place.dy), {
+      icon,
+      zIndexOffset: on ? 2000 : Math.round(1000 - station.priceEur * 100),
+    })
       .bindPopup(sheetContent(station, price, age, origin, stations), {
         className: "sheet",
         closeButton: false,
@@ -693,6 +736,12 @@ async function start(): Promise<void> {
     }
     void loadViewport(false);
   }, VIEWPORT_DEBOUNCE_MS);
+  map.on("zoomend", () => {
+    if (viewportMode === "zoom") {
+      return;
+    }
+    renderView();
+  });
   map.on("moveend", onMoveEnd);
 
   document.addEventListener("visibilitychange", () => {
