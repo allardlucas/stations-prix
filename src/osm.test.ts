@@ -7,8 +7,10 @@ import {
   applySnapToVisible,
   decideSnaps,
   expandBboxKm,
+  geocodePlace,
   hintFromRaw,
   NOMINATIM_URL,
+  parseNominatimPlace,
   parseNominatimFuels,
   parseOverpassFuels,
   pickReliableSnap,
@@ -97,6 +99,8 @@ describe("Itxassou 64250001 fixture", () => {
     if (decision.kind !== "snap") {
       return;
     }
+    expect(decision.name).toBe("Intermarché");
+    expect(decision.brand).toBe("Intermarché");
     expectNearPump(decision.lat, decision.lon);
 
     const visible = visibleStationFromRaw(
@@ -402,6 +406,45 @@ describe("refreshSnaps", () => {
       lon: -1.405,
     });
     expect(applySnapToVisible(visible!, cache.get("64250001")).snapped).toBeUndefined();
+  });
+});
+
+describe("geocodePlace / parseNominatimPlace", () => {
+  it("reads the first hit and shortens display_name", () => {
+    expect(
+      parseNominatimPlace([
+        {
+          lat: "43.4933379",
+          lon: "-1.475099",
+          display_name: "Bayonne, Pyrénées-Atlantiques, France",
+        },
+      ]),
+    ).toEqual({ lat: 43.4933379, lon: -1.475099, label: "Bayonne" });
+    expect(parseNominatimPlace([])).toBeNull();
+    expect(parseNominatimPlace({})).toBeNull();
+  });
+
+  it("skips the Nominatim slot when fetchFn is injected", async () => {
+    const fetchFn = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          lat: "43.42",
+          lon: "-1.59",
+          display_name: "Bidart, Pyrénées-Atlantiques, France",
+        },
+      ],
+    });
+    const hit = await geocodePlace("Bidart", { fetchFn });
+    expect(hit).toEqual({ lat: 43.42, lon: -1.59, label: "Bidart" });
+    expect(String(fetchFn.mock.calls[0]?.[0])).toContain(NOMINATIM_URL);
+    expect(String(fetchFn.mock.calls[0]?.[0])).toContain("countrycodes=fr");
+  });
+
+  it("returns null for a blank query without fetching", async () => {
+    const fetchFn = vi.fn();
+    expect(await geocodePlace("  ", { fetchFn })).toBeNull();
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 });
 

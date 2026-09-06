@@ -2,6 +2,18 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./style.css";
 import { fetchStationsInBbox } from "./api";
+import { OTHER_BRAND, applyBrandFromSnap, brandKeysInViewport } from "./brand";
+import {
+  detourGainEur,
+  FILL_STORAGE_KEY,
+  formatGainEur,
+  gainVsLabel,
+  parseFillPrefs,
+  referencePrice,
+  sanitizeFillPrefs,
+  serializeFillPrefs,
+  type FillPrefs,
+} from "./detour";
 import {
   FRESHNESS_OPACITY,
   FUEL_FIELDS,
@@ -15,9 +27,20 @@ import {
   type VisibleStation,
   visibleStationFromRaw,
 } from "./domain";
+import {
+  FAVORITES_STORAGE_KEY,
+  addFavorite,
+  favoriteChipLabel,
+  favoriteFromStation,
+  isFavorite,
+  parseFavorites,
+  removeFavorite,
+  serializeFavorites,
+  type Favorite,
+} from "./favorites";
 import { formatDistanceKm, haversineKm, type LatLon } from "./geo";
 import { goLinks } from "./links";
-import { applySnapToVisible, refreshSnaps, type SnapDecision } from "./osm";
+import { applySnapToVisible, geocodePlace, refreshSnaps, type SnapDecision } from "./osm";
 import {
   boundsToBbox,
   debounce,
@@ -37,9 +60,26 @@ function requireElement(id: string): HTMLElement {
   return element;
 }
 
+function requireInput(id: string): HTMLInputElement {
+  const element = document.getElementById(id);
+  if (!(element instanceof HTMLInputElement)) {
+    throw new Error(`missing input #${id}`);
+  }
+  return element;
+}
+
+const chrome = requireElement("chrome");
 const banner = requireElement("banner");
 const fuelsNav = requireElement("fuels");
 const ranking = requireElement("ranking");
+const favoritesNav = requireElement("favorites");
+const placeForm = requireElement("place-search") as HTMLFormElement;
+const placeInput = requireInput("place-q");
+const brandSelect = requireElement("brand-filter") as HTMLSelectElement;
+const highwayButton = requireElement("highway-filter") as HTMLButtonElement;
+const fillSummary = requireElement("fill-summary");
+const tankInput = requireInput("tank-l");
+const consoInput = requireInput("conso-l100");
 
 let selectedFuel: Fuel = "gazole";
 let focusedId: string | undefined;
@@ -51,12 +91,39 @@ let viewportMode: "ok" | "capped" | "zoom" = "ok";
 let loadSeq = 0;
 let inFlight: AbortController | undefined;
 let map: L.Map | undefined;
+let ignoreMoveLabel = false;
+let brandFilter = "toutes";
+let highwayOnly = false;
+let favorites: Favorite[] = parseFavorites(readStore(FAVORITES_STORAGE_KEY));
+let fillPrefs: FillPrefs = parseFillPrefs(readStore(FILL_STORAGE_KEY));
 const markers = L.layerGroup();
 const markerById = new Map<string, L.Marker>();
 const snapCache = new Map<string, SnapDecision>();
 
+function readStore(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode / quota */
+  }
+}
+
 function setBanner(text: string): void {
   banner.textContent = text;
+}
+
+function syncMapTop(): void {
+  const height = Math.ceil(chrome.getBoundingClientRect().height);
+  document.documentElement.style.setProperty("--chrome-h", `${height + 8}px`);
+  map?.invalidateSize({ animate: false });
 }
 
 function visibleStations(now = new Date()): VisibleStation[] {
@@ -65,8 +132,42 @@ function visibleStations(now = new Date()): VisibleStation[] {
     if (!station) {
       return [];
     }
-    return [applySnapToVisible(station, snapCache.get(station.id))];
+    const snap = snapCache.get(station.id);
+    const snapped = applySnapToVisible(station, snap);
+    const brand = applyBrandFromSnap(snapped, snap);
+    return [{ ...snapped, ...brand }];
   });
+}
+
+function displayedStations(now = new Date()): VisibleStation[] {
+  let stations = visibleStations(now);
+  if (highwayOnly) {
+    stations = stations.filter((station) => station.highway);
+  }
+  renderBrandOptions(brandKeysInViewport(stations));
+  if (brandFilter !== "toutes") {
+    stations = stations.filter((station) => station.brandKey === brandFilter);
+  }
+  return stations;
+}
+
+function renderBrandOptions(keys: string[]): void {
+  const previous = brandFilter;
+  brandSelect.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "toutes";
+  all.textContent = "Toutes";
+  brandSelect.append(all);
+  for (const key of keys) {
+    const option = document.createElement("option");
+    option.value = key;
+    option.textContent = key === OTHER_BRAND ? "Autre" : key;
+    brandSelect.append(option);
+  }
+  const next =
+    previous === "toutes" || keys.includes(previous) ? previous : "toutes";
+  brandSelect.value = next;
+  brandFilter = next;
 }
 
 function distanceOrigin(): LatLon {
@@ -123,11 +224,44 @@ function hoursBlock(hours: HoursInfo): HTMLElement {
   return box;
 }
 
+function gainLine(
+  station: VisibleStation,
+  peers: readonly VisibleStation[],
+  origin: LatLon,
+): HTMLElement | undefined {
+  const ref = referencePrice(station.id, peers, origin);
+  if (!ref) {
+    return undefined;
+  }
+  const gain = detourGainEur({
+    stationPrice: station.priceEur,
+    referencePrice: ref.price,
+    detourKm: haversineKm(origin, station),
+    tankL: fillPrefs.tankL,
+    consoL100: fillPrefs.consoL100,
+  });
+  const line = document.createElement("div");
+  line.className = "gain";
+  line.textContent = `approx. ${formatGainEur(gain)} ${gainVsLabel(ref.kind)}`;
+  return line;
+}
+
+function toggleFavorite(station: VisibleStation): void {
+  if (isFavorite(favorites, station.id)) {
+    favorites = removeFavorite(favorites, station.id);
+  } else {
+    favorites = addFavorite(favorites, favoriteFromStation(station));
+  }
+  writeStore(FAVORITES_STORAGE_KEY, serializeFavorites(favorites));
+  renderView();
+}
+
 function sheetContent(
   station: VisibleStation,
   price: string,
   age: string,
   origin: LatLon,
+  peers: readonly VisibleStation[],
 ): HTMLElement {
   const body = document.createElement("div");
   if (station.brand) {
@@ -142,17 +276,56 @@ function sheetContent(
   const meta = document.createElement("div");
   meta.textContent = `${price} · maj ${age} · ${km}`;
   body.append(place, meta);
+  if (station.highway) {
+    const tag = document.createElement("div");
+    tag.className = "highway";
+    tag.textContent = "Autoroute";
+    body.append(tag);
+  }
   if (station.snapped) {
     const hint = document.createElement("div");
     hint.className = "snap-hint";
     hint.textContent = "position OSM";
     body.append(hint);
   }
+  const gain = gainLine(station, peers, origin);
+  if (gain) {
+    body.append(gain);
+  }
   if (station.hours) {
     body.append(hoursBlock(station.hours));
   }
-  body.append(goNav(station));
+  const fav = document.createElement("button");
+  fav.type = "button";
+  fav.className = "fav-toggle";
+  fav.textContent = isFavorite(favorites, station.id)
+    ? "Retirer des favoris"
+    : "Ajouter aux favoris";
+  fav.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleFavorite(station);
+  });
+  body.append(goNav(station), fav);
   return body;
+}
+
+function renderFavorites(): void {
+  favoritesNav.replaceChildren();
+  favoritesNav.hidden = favorites.length === 0;
+  for (const fav of favorites) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = favoriteChipLabel(fav);
+    if (fav.id === focusedId) {
+      button.setAttribute("aria-current", "true");
+    }
+    button.addEventListener("click", () => {
+      focusedId = fav.id;
+      centerMap(fav.lat, fav.lon, 14, favoriteChipLabel(fav));
+      renderView();
+    });
+    favoritesNav.append(button);
+  }
 }
 
 function renderRanking(
@@ -196,7 +369,12 @@ function renderRanking(
       renderView();
       markerById.get(station.id)?.openPopup();
     });
-    item.append(button, goNav(station));
+    item.append(button);
+    const gain = gainLine(station, stations, origin);
+    if (gain) {
+      item.append(gain);
+    }
+    item.append(goNav(station));
     ranking.append(item);
   });
 }
@@ -220,17 +398,25 @@ function renderPins(
       html: `<div class="pin${on ? " is-on" : ""}" data-freshness="${station.freshness}" style="opacity:${FRESHNESS_OPACITY[station.freshness]}"><strong>${price}</strong><span>${age}</span></div>`,
     });
     const marker = L.marker([station.lat, station.lon], { icon })
-      .bindPopup(sheetContent(station, price, age, origin), {
+      .bindPopup(sheetContent(station, price, age, origin, stations), {
         className: "sheet",
         closeButton: false,
       })
       .on("click", () => {
         focusedId = station.id;
         renderRanking(stations, now, origin);
+        renderFavorites();
       });
     marker.addTo(markers);
     markerById.set(station.id, marker);
   }
+}
+
+function renderFillSummary(): void {
+  const conso = String(fillPrefs.consoL100).replace(".", ",");
+  fillSummary.textContent = `Plein ${fillPrefs.tankL} L · ${conso} L/100`;
+  tankInput.value = String(fillPrefs.tankL);
+  consoInput.value = String(fillPrefs.consoL100);
 }
 
 function renderView(): void {
@@ -242,12 +428,15 @@ function renderView(): void {
     markerById.clear();
     ranking.replaceChildren();
     ranking.hidden = true;
+    renderBrandOptions([]);
+    renderFavorites();
     setBanner(`Zoomez pour afficher les stations · ${fuel}`);
+    syncMapTop();
     return;
   }
 
   const now = new Date();
-  const stations = visibleStations(now);
+  const stations = displayedStations(now);
   if (focusedId && !stations.some((station) => station.id === focusedId)) {
     focusedId = undefined;
   }
@@ -255,14 +444,24 @@ function renderView(): void {
   const origin = distanceOrigin();
   renderPins(stations, now, origin);
   renderRanking(stations, now, origin);
+  renderFavorites();
 
   const cap =
     viewportMode === "capped"
       ? ` · max ${VIEWPORT_LIMIT}, zoomez pour affiner`
       : "";
+  const highway = highwayOnly ? " · Autoroute" : "";
+  const brand =
+    brandFilter !== "toutes"
+      ? ` · ${brandFilter === OTHER_BRAND ? "Autre" : brandFilter}`
+      : "";
   setBanner(
-    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel}${cap}`,
+    `${stations.length} station${stations.length === 1 ? "" : "s"} · ${fuel} · ${positionLabel}${highway}${brand}${cap}`,
   );
+  if (focusedId) {
+    markerById.get(focusedId)?.openPopup();
+  }
+  syncMapTop();
 }
 
 function renderFuelButtons(): void {
@@ -279,6 +478,24 @@ function renderFuelButtons(): void {
       renderView();
     });
     fuelsNav.append(button);
+  }
+}
+
+function centerMap(lat: number, lon: number, zoom: number, label: string): void {
+  if (!map) {
+    return;
+  }
+  ignoreMoveLabel = true;
+  positionLabel = label;
+  const center = map.getCenter();
+  const same =
+    Math.abs(center.lat - lat) < 1e-5 &&
+    Math.abs(center.lng - lon) < 1e-5 &&
+    map.getZoom() === zoom;
+  map.setView([lat, lon], zoom);
+  if (same) {
+    ignoreMoveLabel = false;
+    void loadViewport(false);
   }
 }
 
@@ -356,8 +573,67 @@ async function loadViewport(isFirstLoad: boolean): Promise<void> {
   }
 }
 
+function bindChrome(): void {
+  placeForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const query = placeInput.value.trim();
+    if (!query) {
+      return;
+    }
+    const submit = placeForm.querySelector("button[type='submit']");
+    if (submit instanceof HTMLButtonElement) {
+      submit.disabled = true;
+    }
+    void geocodePlace(query)
+      .then((hit) => {
+        if (!hit) {
+          setBanner("Lieu introuvable.");
+          return;
+        }
+        centerMap(hit.lat, hit.lon, 13, hit.label);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "erreur réseau";
+        setBanner(`Recherche impossible (${message}).`);
+      })
+      .finally(() => {
+        if (submit instanceof HTMLButtonElement) {
+          submit.disabled = false;
+        }
+      });
+  });
+
+  brandSelect.addEventListener("change", () => {
+    brandFilter = brandSelect.value || "toutes";
+    focusedId = undefined;
+    renderView();
+  });
+
+  highwayButton.addEventListener("click", () => {
+    highwayOnly = !highwayOnly;
+    highwayButton.setAttribute("aria-pressed", String(highwayOnly));
+    focusedId = undefined;
+    renderView();
+  });
+
+  const onFillChange = () => {
+    fillPrefs = sanitizeFillPrefs({
+      tankL: tankInput.valueAsNumber,
+      consoL100: consoInput.valueAsNumber,
+    });
+    writeStore(FILL_STORAGE_KEY, serializeFillPrefs(fillPrefs));
+    renderFillSummary();
+    renderView();
+  };
+  tankInput.addEventListener("change", onFillChange);
+  consoInput.addEventListener("change", onFillChange);
+}
+
 async function start(): Promise<void> {
   renderFuelButtons();
+  renderFillSummary();
+  bindChrome();
+  renderFavorites();
   const center = await locate();
   map = L.map("map", { zoomControl: true }).setView(
     [center.lat, center.lon],
@@ -373,11 +649,16 @@ async function start(): Promise<void> {
     fillOpacity: 0.9,
   }).addTo(map);
   markers.addTo(map);
+  syncMapTop();
 
   await loadViewport(true);
 
   const onMoveEnd = debounce(() => {
-    positionLabel = "zone visible";
+    if (ignoreMoveLabel) {
+      ignoreMoveLabel = false;
+    } else {
+      positionLabel = "zone visible";
+    }
     void loadViewport(false);
   }, VIEWPORT_DEBOUNCE_MS);
   map.on("moveend", onMoveEnd);
