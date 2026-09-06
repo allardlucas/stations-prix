@@ -10,8 +10,6 @@ import {
   pinHtml,
 } from "./pin";
 
-const MONOGRAMS = ["TE", "IM", ">L<", ">C<", "Es", "Sh", "Av", "Ca", "Li", "Al", "Dy", "É", ">S<"];
-
 describe("brandMark", () => {
   it("gives a logo (or pump fallback) for every known enseigne plus Autre", () => {
     for (const key of BRAND_KEYS) {
@@ -30,15 +28,26 @@ describe("brandMark", () => {
 });
 
 describe("brandMarkSvg", () => {
-  it("inlines a local logo SVG, not a monogram or a remote asset", () => {
+  it("inlines the official TotalEnergies sun, not a monogram or a remote asset", () => {
     const svg = brandMarkSvg("TotalEnergies");
     expect(svg).toContain("<svg");
     expect(svg).toContain('class="pin-mark"');
-    expect(svg).toContain("#E30613");
+    expect(svg).toContain("linearGradient");
     expect(svg).not.toContain("<text");
-    expect(svg).not.toContain("TE");
-    expect(svg).not.toMatch(/https?:\/\//);
-    expect(svg).not.toMatch(/wikimedia|brandfetch|clearbit/i);
+    expect(svg).not.toContain(">TE<");
+    expect(svg).not.toMatch(/brandfetch|clearbit/i);
+    expect(svg).not.toMatch(/upload\.wikimedia|commons\.wikimedia/i);
+  });
+
+  it("inlines the official Carrefour C and Shell pecten", () => {
+    const carrefour = brandMarkSvg("Carrefour");
+    expect(carrefour).toContain("#ed1c24");
+    expect(carrefour).toContain("#005bab");
+    expect(carrefour).not.toContain("<text");
+    const shell = brandMarkSvg("Shell");
+    expect(shell).toMatch(/#FFCD00|#ffcd00/i);
+    expect(shell).toMatch(/#DA291C|#da291c/i);
+    expect(shell).not.toContain("<text");
   });
 
   it("uses a generic pump for Autre / unknown, without random letters", () => {
@@ -53,10 +62,8 @@ describe("brandMarkSvg", () => {
     for (const key of BRAND_KEYS) {
       const svg = brandMarkSvg(key);
       expect(svg, key).toContain("<svg");
+      expect(svg, key).toContain('class="pin-mark"');
       expect(svg, key).not.toContain("<text");
-      for (const letters of MONOGRAMS) {
-        expect(svg, `${key} ${letters}`).not.toContain(letters);
-      }
     }
   });
 });
@@ -74,8 +81,7 @@ describe("pinHtml", () => {
     expect(html).toContain('data-freshness="full"');
     expect(html).toContain('data-brand="Intermarché"');
     expect(html).toContain('class="pin-mark"');
-    expect(html).toContain("#2E7D32");
-    expect(html).not.toContain("IM");
+    expect(html).not.toContain(">IM<");
     expect(html).not.toContain("<text");
     expect(html).toContain("Gazole");
     expect(html).toContain("1,749 €");

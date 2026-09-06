@@ -2,7 +2,7 @@
 
 Stations proches et prix du carburant choisi. Toutes les stations du viewport qui ont un prix sont affichées ; l’âge change l’opacité du pin (plein ≤24 h, moyen ≤72 h, pâle au-delà).
 
-Lucas ouvre la page avant le plein, choisit un carburant, lit le **logo enseigne** (pastille SVG locale fidèle au signe de marque — pas un monogramme `TE` / `C`, pas un logo scrapé ni une clé API), le **type**, le **prix** et l’**âge** sur les pins. Sources / licence : `src/assets/brands/README.md`. Fond de carte **OpenFreeMap Bright** (clair, style MapLibre sans clé API — pas Carto, pas Mapbox, pas satellite, pas dark). La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut). Pas de barre bas compte / historique / favoris / stats.
+Lucas ouvre la page avant le plein, choisit un carburant, lit le **logo enseigne officiel** (SVG Wikimedia / Simple Icons packagé en local — pas un monogramme `TE` / `C`, pas de CDN ni Clearbit), le **type**, le **prix** et l’**âge** sur les pins. Sources / licence : `src/assets/brands/README.md`. Fond de carte **OpenFreeMap Bright** (clair, style MapLibre sans clé API — pas Carto, pas Mapbox, pas satellite, pas dark). La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut). Pas de barre bas compte / historique / favoris / stats.
 
 ## Lancer
 
