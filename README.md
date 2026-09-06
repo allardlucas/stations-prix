@@ -2,7 +2,7 @@
 
 Stations proches et prix du carburant choisi. Toutes les stations du viewport qui ont un prix sont affichées ; l’âge change l’opacité du pin (plein ≤24 h, moyen ≤72 h, pâle au-delà).
 
-Lucas ouvre la page avant le plein, choisit un carburant, lit le prix et l'âge sur les pins. La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut).
+Lucas ouvre la page avant le plein, choisit un carburant, lit le **logo enseigne** (pastille / monogramme SVG, pas un logo officiel), le **type**, le **prix** et l’**âge** sur les pins. Fond de carte **Carto Positron** (clair, tuiles Leaflet libres — pas Mapbox, pas satellite, pas dark). La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut). Pas de barre bas compte / historique / favoris / stats.
 
 ## Lancer
 
@@ -44,7 +44,7 @@ Revenir sur l’onglet après plus de ~3 min depuis le dernier fetch réussi rel
 
 1. Autorise la géoloc. La carte se centre sur toi et le bandeau dit `votre position`. Refuse la géoloc. Le bandeau dit `Bayonne (défaut)`.
 2. Choisis Gazole, puis SP95, SP98, E85, E10. Les pins et la liste bas changent. Une station sans prix pour ce carburant disparaît.
-3. Chaque pin montre un prix et un âge (`12 min`, `3 h`, `2 j`). L’opacité suit l’âge : pleine ≤24 h, moyenne ≤72 h, pâle au-delà. La liste top 5 aussi.
+3. Chaque pin montre pastille enseigne + carburant + prix + âge (`12 min`, `3 h`, `2 j`). L’opacité suit l’âge : pleine ≤24 h, moyenne ≤72 h, pâle au-delà. La liste top 5 aussi. Le fond est clair (Carto Positron), sans filtre d’inversion.
 4. Un prix de plus de 72 h reste visible (pin pâle). Pour le prouver hors carte, lance `npm test` (E85 du 20 août = `faint` au 5 septembre).
 5. Déplace la carte hors Pays Basque : d’autres pins apparaissent, la liste top 5 se recalcule sur le viewport (y compris les prix anciens s’ils sont les moins chers). Change de carburant. Tape une ligne : le pin se centre. Dézoome trop loin : plus de pins ni de liste, bandeau « Zoomez pour afficher les stations ».
 6. Fiche et top 5 : liens **Y aller** / Waze / Google Maps / Apple Plans (`geo:` + URLs https). La distance en km s’affiche à côté.

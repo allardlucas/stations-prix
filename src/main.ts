@@ -47,6 +47,8 @@ import {
   togglePanel,
   type PanelsState,
 } from "./panels";
+import { PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
+import { MAP_TILE_OPTIONS, MAP_TILE_URL, USER_DOT } from "./tiles";
 import {
   boundsToBbox,
   debounce,
@@ -411,9 +413,16 @@ function renderPins(
     const on = station.id === focusedId;
     const icon = L.divIcon({
       className: "",
-      iconSize: [86, 22],
-      iconAnchor: [43, 22],
-      html: `<div class="pin${on ? " is-on" : ""}" data-freshness="${station.freshness}" style="opacity:${FRESHNESS_OPACITY[station.freshness]}"><strong>${price}</strong><span>${age}</span></div>`,
+      iconSize: [...PIN_ICON_SIZE],
+      iconAnchor: [...PIN_ICON_ANCHOR],
+      html: pinHtml({
+        brandKey: station.brandKey,
+        fuel: station.fuel,
+        price,
+        age,
+        freshness: station.freshness,
+        selected: on,
+      }),
     });
     const marker = L.marker([station.lat, station.lon], { icon })
       .bindPopup(sheetContent(station, price, age, origin, stations), {
@@ -667,14 +676,8 @@ async function start(): Promise<void> {
     13,
   );
   map.zoomControl.setPosition("topright");
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(map);
-  L.circleMarker([center.lat, center.lon], {
-    radius: 6,
-    color: "#d7dde8",
-    fillOpacity: 0.9,
-  }).addTo(map);
+  L.tileLayer(MAP_TILE_URL, MAP_TILE_OPTIONS).addTo(map);
+  L.circleMarker([center.lat, center.lon], USER_DOT).addTo(map);
   markers.addTo(map);
   syncMapTop();
 
