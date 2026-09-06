@@ -18,6 +18,10 @@ body,
   margin: 0;
 }
 
+#map {
+  background: #f8f4f0;
+}
+
 .hud {
   position: absolute;
   top: 0;

@@ -1,5 +1,7 @@
 import L from "leaflet";
+import { maplibreGL } from "@maplibre/maplibre-gl-leaflet";
 import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { fetchStationsInBbox } from "./api";
 import { OTHER_BRAND, applyBrandFromSnap, brandKeysInViewport } from "./brand";
@@ -48,7 +50,7 @@ import {
   type PanelsState,
 } from "./panels";
 import { PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
-import { MAP_TILE_OPTIONS, MAP_TILE_URL, USER_DOT } from "./tiles";
+import { MAP_TILE_OPTIONS, USER_DOT } from "./tiles";
 import {
   boundsToBbox,
   debounce,
@@ -676,7 +678,7 @@ async function start(): Promise<void> {
     13,
   );
   map.zoomControl.setPosition("topright");
-  L.tileLayer(MAP_TILE_URL, MAP_TILE_OPTIONS).addTo(map);
+  maplibreGL(MAP_TILE_OPTIONS).addTo(map);
   L.circleMarker([center.lat, center.lon], USER_DOT).addTo(map);
   markers.addTo(map);
   syncMapTop();
