@@ -54,6 +54,7 @@ export function parseRawStation(value: unknown): RawStation | null {
       (typeof row.cp === "number" && Number.isFinite(row.cp)
         ? String(row.cp)
         : undefined),
+    pop: asOptionalString(row.pop),
     marque: asOptionalString(row.marque),
     nom: asOptionalString(row.nom),
     enseigne: asOptionalString(row.enseigne),

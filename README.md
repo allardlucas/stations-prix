@@ -26,7 +26,17 @@ Si la géoloc est refusée ou expire, le centre est Bayonne (43.49, -1.47). Ensu
 
 Si la bbox dépasse 1° de lat ou lon (~80–110 km), aucun fetch : le bandeau demande de zoomer (choix le plus simple pour le mobile). L’API ODS v2.1 plafonne à 100 records ; au plafond le bandeau le dit.
 
-Le schéma live n’a pas `marque` / `nom` / `enseigne` (47 champs). Ils sont parsés s’ils arrivent, sinon la fiche n’invente rien. Horaires : `horaires_automate_24_24` (`Oui` → « Automate 24h ») et créneaux dans `horaires` (JSON). Distance haversine depuis la géoloc si elle a réussi, sinon le centre du viewport.
+Le schéma live n’a pas `marque` / `nom` / `enseigne` (47 champs). Ils sont parsés s’ils arrivent. Sinon l’enseigne est déduite des tokens connus dans le nom/brand OSM au recalage, ou dans l’adresse. Pas de match → tag filtre **Autre** (visible tant que le filtre est « Toutes ») ; la fiche n’affiche pas « Autre » comme une enseigne. La liste du filtre = enseignes présentes dans le viewport.
+
+`pop` est bien dans le flux live : **A** = autoroute, **R** = route (sample 2026-09-06 : 436 A / 9369 R, dont Bidart A63 `64210005`). Le toggle **Autoroute** ne garde que `pop=A`.
+
+Recherche lieu : Nominatim (`User-Agent` hors navigateur, file d’attente ≥1,1 s partagée avec le snap). Centre la carte et recharge le viewport.
+
+Favoris : `localStorage`, max 8, sans compte. Ajout / retrait depuis la fiche ; chips pour recentrer / highlight.
+
+Gain net détour (approx.) : `litres × (prix réf − prix station) − (km × conso/100 × prix station)`. Réf = moins chère autre station ≤ 8 km de l’origine, sinon moyenne viewport. Défauts plein 50 L / 6,5 L/100 en `localStorage`.
+
+Horaires : `horaires_automate_24_24` (`Oui` → « Automate 24h ») et créneaux dans `horaires` (JSON). Distance haversine depuis la géoloc si elle a réussi, sinon le centre du viewport.
 
 Revenir sur l’onglet après plus de ~3 min depuis le dernier fetch réussi relance le viewport. Pas de poll périodique.
 
@@ -38,6 +48,10 @@ Revenir sur l’onglet après plus de ~3 min depuis le dernier fetch réussi rel
 4. Un prix de plus de 72 h reste visible (pin pâle). Pour le prouver hors carte, lance `npm test` (E85 du 20 août = `faint` au 5 septembre).
 5. Déplace la carte hors Pays Basque : d’autres pins apparaissent, la liste top 5 se recalcule sur le viewport (y compris les prix anciens s’ils sont les moins chers). Change de carburant. Tape une ligne : le pin se centre. Dézoome trop loin : plus de pins ni de liste, bandeau « Zoomez pour afficher les stations ».
 6. Fiche et top 5 : liens **Y aller** / Waze / Google Maps / Apple Plans (`geo:` + URLs https). La distance en km s’affiche à côté.
-7. Si ODS envoie des horaires : « Automate 24h » et/ou les créneaux sur la fiche. S’ils manquent (ex. 22 Chemin d'Arancette, `horaires` null), rien n’est inventé. L’enseigne n’apparaît que si le champ est présent.
+7. Si ODS envoie des horaires : « Automate 24h » et/ou les créneaux sur la fiche. S’ils manquent (ex. 22 Chemin d'Arancette, `horaires` null), rien n’est inventé.
 8. Laisse l’onglet en arrière-plan plus de 3 min, reviens : un nouveau fetch viewport part (pas de timer périodique).
-9. Intermarché Itxassou `64250001` : ODS `43.338,-1.405` est faux (~1,6 km). Après recalage, le pin et **Y aller** doivent viser la pompe OSM (~`43.3504,-1.4156`), pas le geom ODS. Fiche : mention discrète « position OSM ».
+9. Intermarché Itxassou `64250001` : ODS `43.338,-1.405` est faux (~1,6 km). Après recalage, le pin et **Y aller** doivent viser la pompe OSM (~`43.3504,-1.4156`), pas le geom ODS. Fiche : mention discrète « position OSM » ; enseigne **Intermarché** si le nom OSM est là.
+10. Tape « Bidart » (ou une ville) : la carte se centre, le viewport recharge. Filtre enseigne : « Toutes » par défaut, liste = enseignes du viewport, **Autre** = pas de token connu.
+11. Toggle **Autoroute** : plus que `pop=A` (Aire de Bidart Est/Ouest sur l’A63). Sans le toggle, R et A restent.
+12. Fiche : **Ajouter aux favoris** (max 8) ; un chip recentre et highlight. Retrait depuis la fiche.
+13. Fiche / top 5 : ligne `approx. ±X,XX €` vs moins chère proche ou vs moyenne. Change plein / L/100 : le gain se recalcule.

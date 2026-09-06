@@ -6,6 +6,7 @@ const liveRow = {
   geom: { lat: 43.493, lon: -1.474 },
   adresse: "123 avenue henri de navarre",
   ville: "Bayonne",
+  pop: "R",
   horaires_automate_24_24: "Oui",
   horaires:
     '{"@automate-24-24":"1","jour":[{"@nom":"Lundi","@ferme":"","horaire":{"@ouverture":"07.00","@fermeture":"19.30"}}]}',
@@ -18,6 +19,7 @@ describe("parseRawStation", () => {
     const station = parseRawStation(liveRow);
     expect(station?.horaires_automate_24_24).toBe("Oui");
     expect(station?.horaires).toContain("@ouverture");
+    expect(station?.pop).toBe("R");
     expect(station?.enseigne).toBeUndefined();
     expect(station?.marque).toBeUndefined();
     expect(station?.nom).toBeUndefined();
@@ -43,5 +45,11 @@ describe("parseRawStation", () => {
       nom: "Bayonne Navarre",
     });
     expect(parseRawStation({ ...liveRow, enseigne: 1 })?.enseigne).toBeUndefined();
+  });
+
+  it("reads pop A/R from the live ODS schema", () => {
+    expect(parseRawStation({ ...liveRow, pop: "A" })?.pop).toBe("A");
+    expect(parseRawStation({ ...liveRow, pop: "R" })?.pop).toBe("R");
+    expect(parseRawStation({ ...liveRow, pop: 1 })?.pop).toBeUndefined();
   });
 });

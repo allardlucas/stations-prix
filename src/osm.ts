@@ -57,7 +57,14 @@ export type ScoredFuel = OsmFuel & {
 };
 
 export type SnapDecision =
-  | { kind: "snap"; lat: number; lon: number; score: number }
+  | {
+      kind: "snap";
+      lat: number;
+      lon: number;
+      score: number;
+      name?: string;
+      brand?: string;
+    }
   | { kind: "keep" };
 
 export function stationSnapId(raw: RawStation): string | undefined {
@@ -259,18 +266,13 @@ export function pickReliableSnap(
   if (hint.id) {
     const linked = scored.filter((poi) => poi.refPrixId === hint.id);
     if (linked.length === 1) {
-      return {
-        kind: "snap",
-        lat: linked[0].lat,
-        lon: linked[0].lon,
-        score: 1,
-      };
+      return snapDecision(linked[0], 1);
     }
   }
 
   const best = scored[0];
   if (scored.length === 1) {
-    return { kind: "snap", lat: best.lat, lon: best.lon, score: best.score };
+    return snapDecision(best, best.score);
   }
 
   const second = scored[1];
@@ -282,9 +284,23 @@ export function pickReliableSnap(
     second.distKm - best.distKm >= SNAP_CLEAR_NEAR_GAP_KM;
 
   if (identityWin || nearWin) {
-    return { kind: "snap", lat: best.lat, lon: best.lon, score: best.score };
+    return snapDecision(best, best.score);
   }
   return { kind: "keep" };
+}
+
+function snapDecision(
+  poi: Pick<OsmFuel, "lat" | "lon" | "name" | "brand">,
+  score: number,
+): Extract<SnapDecision, { kind: "snap" }> {
+  return {
+    kind: "snap",
+    lat: poi.lat,
+    lon: poi.lon,
+    score,
+    name: poi.name,
+    brand: poi.brand,
+  };
 }
 
 export function applySnapToVisible(
@@ -493,6 +509,69 @@ async function waitNominatimSlot(signal?: AbortSignal): Promise<void> {
     }
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+export function nominatimPlaceUrl(query: string): URL {
+  const url = new URL(NOMINATIM_URL);
+  url.searchParams.set("q", query);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("countrycodes", "fr");
+  return url;
+}
+
+export type GeocodeHit = LatLon & {
+  label: string;
+};
+
+export function shortGeocodeLabel(displayName: string): string {
+  const first = displayName.split(",")[0]?.trim();
+  return first || displayName.trim();
+}
+
+export function parseNominatimPlace(body: unknown): GeocodeHit | null {
+  if (!Array.isArray(body) || body.length === 0) {
+    return null;
+  }
+  const item = asRecord(body[0]);
+  if (!item) {
+    return null;
+  }
+  const lat = asFiniteNumber(item.lat);
+  const lon = asFiniteNumber(item.lon);
+  if (lat === undefined || lon === undefined) {
+    return null;
+  }
+  const display =
+    asOptionalString(item.display_name) ??
+    asOptionalString(item.name) ??
+    `${lat},${lon}`;
+  return { lat, lon, label: shortGeocodeLabel(display) };
+}
+
+export async function geocodePlace(
+  query: string,
+  options: {
+    signal?: AbortSignal;
+    fetchFn?: typeof fetch;
+  } = {},
+): Promise<GeocodeHit | null> {
+  const q = query.trim();
+  if (!q) {
+    return null;
+  }
+  if (!options.fetchFn) {
+    await waitNominatimSlot(options.signal);
+  }
+  const fetchFn = options.fetchFn ?? fetch;
+  const response = await fetchFn(nominatimPlaceUrl(q), {
+    headers: osmHeaders(),
+    signal: withTimeout(options.signal, NOMINATIM_CLIENT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`Nominatim HTTP ${response.status}`);
+  }
+  return parseNominatimPlace(await response.json());
 }
 
 export async function fetchNominatimFuels(

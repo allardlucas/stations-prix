@@ -7,6 +7,7 @@ import {
   TOP_CHEAPEST,
   brandName,
   cheapestStations,
+  isHighwayPop,
   formatAge,
   freshnessBucket,
   hoursFromRaw,
@@ -114,14 +115,26 @@ describe("visibleStationFromRaw fuel mapping", () => {
   });
 
   it("passes through enseigne/nom when ODS sends them, else empty", () => {
-    expect(visibleStationFromRaw(raw, "gazole", now)?.brand).toBe("");
-    expect(
-      visibleStationFromRaw(
-        { ...raw, enseigne: "TotalEnergies", nom: "Station Bayonne" },
-        "gazole",
-        now,
-      )?.brand,
-    ).toBe("TotalEnergies · Station Bayonne");
+    const plain = visibleStationFromRaw(raw, "gazole", now);
+    expect(plain?.brand).toBe("");
+    expect(plain?.brandKey).toBe("Autre");
+    expect(plain?.highway).toBe(false);
+    const named = visibleStationFromRaw(
+      { ...raw, enseigne: "TotalEnergies", nom: "Station Bayonne" },
+      "gazole",
+      now,
+    );
+    expect(named?.brand).toBe("TotalEnergies · Station Bayonne");
+    expect(named?.brandKey).toBe("TotalEnergies");
+  });
+
+  it("marks pop A as highway and R as not", () => {
+    expect(visibleStationFromRaw({ ...raw, pop: "A" }, "gazole", now)?.highway).toBe(
+      true,
+    );
+    expect(visibleStationFromRaw({ ...raw, pop: "R" }, "gazole", now)?.highway).toBe(
+      false,
+    );
   });
 
   it("keeps hours only when ODS has automate or real slots", () => {
@@ -133,6 +146,19 @@ describe("visibleStationFromRaw fuel mapping", () => {
         now,
       )?.hours,
     ).toEqual({ automate24h: true, lines: [] });
+  });
+});
+
+describe("isHighwayPop", () => {
+  it("is true only for ODS pop A", () => {
+    expect(isHighwayPop("A")).toBe(true);
+    expect(isHighwayPop(" a ")).toBe(true);
+    expect(isHighwayPop("R")).toBe(false);
+    expect(isHighwayPop("r")).toBe(false);
+    expect(isHighwayPop(null)).toBe(false);
+    expect(isHighwayPop(undefined)).toBe(false);
+    expect(isHighwayPop("")).toBe(false);
+    expect(isHighwayPop("Autoroute")).toBe(false);
   });
 });
 
@@ -268,6 +294,8 @@ function station(
     address: "",
     city: "Bayonne",
     brand: "",
+    brandKey: "Autre",
+    highway: false,
     hours: null,
     fuel: "gazole",
     updatedAt: now,

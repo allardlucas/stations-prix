@@ -1,3 +1,5 @@
+import { inferBrand } from "./brand";
+
 export const FUELS = ["gazole", "sp95", "sp98", "e85", "e10"] as const;
 export type Fuel = (typeof FUELS)[number];
 
@@ -42,6 +44,8 @@ export type RawStation = {
   adresse?: string | null;
   ville?: string | null;
   cp?: string | null;
+  /** A = autoroute, R = route. Présent sur le schéma v2 live. */
+  pop?: string | null;
   /** Absents du schéma v2 live (47 champs) — lus seulement s'ils arrivent. */
   marque?: string | null;
   nom?: string | null;
@@ -72,6 +76,8 @@ export type VisibleStation = {
   address: string;
   city: string;
   brand: string;
+  brandKey: string;
+  highway: boolean;
   hours: HoursInfo | null;
   fuel: Fuel;
   priceEur: number;
@@ -112,19 +118,31 @@ export function visibleStationFromRaw(
     return null;
   }
 
+  const odsBrand = brandName(raw);
+  const inferred = inferBrand({
+    odsBrand,
+    address: raw.adresse ?? "",
+  });
   return {
     id: String(raw.id ?? `${lat},${lon}`),
     lat,
     lon,
     address: raw.adresse ?? "",
     city: raw.ville ?? "",
-    brand: brandName(raw),
+    brand: inferred.label,
+    brandKey: inferred.key,
+    highway: isHighwayPop(raw.pop),
     hours: hoursFromRaw(raw),
     fuel,
     priceEur: price,
     updatedAt,
     freshness: freshnessBucket(now.getTime() - updatedAt.getTime()),
   };
+}
+
+/** ODS `pop` : A = autoroute, R = route. Autre / vide = pas autoroute. */
+export function isHighwayPop(pop: string | null | undefined): boolean {
+  return typeof pop === "string" && pop.trim().toUpperCase() === "A";
 }
 
 /** Enseigne / marque / nom ODS, sans fallback inventé. */
