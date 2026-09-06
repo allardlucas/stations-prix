@@ -30,8 +30,8 @@ export const PIN_LAYOUT_GAP = 4;
 export const PIN_SLOT_X = PIN_ICON_SIZE[0] + PIN_LAYOUT_GAP;
 export const PIN_SLOT_Y = PIN_ICON_SIZE[1] + PIN_LAYOUT_GAP;
 
-/** (0,0) + 2 anneaux : assez pour un tas ville, trop loin = hide. */
-export const PIN_LAYOUT_MAX_RING = 2;
+/** Au-delà de 2 largeurs de pin, on masque plutôt que d’envoyer le pin hors carte. */
+export const PIN_LAYOUT_MAX_SHIFT = PIN_SLOT_X * 2;
 
 export function pinBox(x: number, y: number, dx = 0, dy = 0): PinBox {
   const ax = x + dx;
@@ -48,80 +48,76 @@ export function boxesOverlap(a: PinBox, b: PinBox): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 }
 
-function ringPriority(ix: number, iy: number): number {
-  if (iy === 0 && ix > 0) {
-    return 0;
-  }
-  if (iy === 0 && ix < 0) {
-    return 1;
-  }
-  if (ix === 0 && iy < 0) {
-    return 2;
-  }
-  if (iy < 0) {
-    return 3;
-  }
-  if (ix === 0 && iy > 0) {
-    return 4;
-  }
-  return 5;
+function shiftLen2(dx: number, dy: number): number {
+  return dx * dx + dy * dy;
 }
 
-/** Slots en spirale compacte : E, W, N d'abord (au-dessus du point). */
-export function spiralSlots(maxRing = PIN_LAYOUT_MAX_RING): { dx: number; dy: number }[] {
-  const slots = [{ dx: 0, dy: 0 }];
-  for (let ring = 1; ring <= maxRing; ring++) {
-    const cells: { ix: number; iy: number; pri: number }[] = [];
-    for (let ix = -ring; ix <= ring; ix++) {
-      for (let iy = -ring; iy <= ring; iy++) {
-        if (Math.max(Math.abs(ix), Math.abs(iy)) !== ring) {
-          continue;
-        }
-        cells.push({ ix, iy, pri: ringPriority(ix, iy) });
-      }
-    }
-    cells.sort((a, b) => a.pri - b.pri || a.iy - b.iy || a.ix - b.ix);
-    for (const cell of cells) {
-      slots.push({ dx: cell.ix * PIN_SLOT_X, dy: cell.iy * PIN_SLOT_Y });
-    }
-  }
-  return slots;
+/** Plus petit décalage cardinal pour que `mover` ne recouvre plus `blocker`. */
+export function minSeparation(mover: PinBox, blocker: PinBox): { dx: number; dy: number } {
+  const options = [
+    { dx: 0, dy: -(mover.bottom - blocker.top + PIN_LAYOUT_GAP) },
+    { dx: blocker.right - mover.left + PIN_LAYOUT_GAP, dy: 0 },
+    { dx: -(mover.right - blocker.left + PIN_LAYOUT_GAP), dy: 0 },
+    { dx: 0, dy: blocker.bottom - mover.top + PIN_LAYOUT_GAP },
+  ];
+  options.sort((a, b) => shiftLen2(a.dx, a.dy) - shiftLen2(b.dx, b.dy));
+  return options[0];
 }
 
 /**
  * Décale les pins dont les bbox 120×40 se chevauchent.
  * Rang bas (prix / focus) garde (0,0) si possible.
- * Plus de slot dans 2 anneaux → hidden (tas trop dense).
+ * Offset = plus petite séparation cardinale (spiderfy léger).
+ * Décalage trop grand → hidden (tas trop dense).
  */
 export function layoutPins(pins: readonly PixelPin[]): PinPlacement[] {
   const ordered = [...pins].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id));
-  const slots = spiralSlots();
   const placed: { pin: PixelPin; dx: number; dy: number }[] = [];
   const byId = new Map<string, PinPlacement>();
+  const max2 = PIN_LAYOUT_MAX_SHIFT * PIN_LAYOUT_MAX_SHIFT;
 
   for (const pin of ordered) {
-    let chosen: { dx: number; dy: number } | undefined;
-    for (const slot of slots) {
-      const box = pinBox(pin.x, pin.y, slot.dx, slot.dy);
-      const hits = placed.some((other) =>
+    let dx = 0;
+    let dy = 0;
+    let hidden = false;
+
+    for (let step = 0; step < 12; step++) {
+      const box = pinBox(pin.x, pin.y, dx, dy);
+      const hit = placed.find((other) =>
         boxesOverlap(box, pinBox(other.pin.x, other.pin.y, other.dx, other.dy)),
       );
-      if (!hits) {
-        chosen = slot;
+      if (!hit) {
+        break;
+      }
+      const nudge = minSeparation(box, pinBox(hit.pin.x, hit.pin.y, hit.dx, hit.dy));
+      dx += nudge.dx;
+      dy += nudge.dy;
+      if (shiftLen2(dx, dy) > max2) {
+        hidden = true;
+        dx = 0;
+        dy = 0;
         break;
       }
     }
-    if (chosen) {
-      placed.push({ pin, dx: chosen.dx, dy: chosen.dy });
-      byId.set(pin.id, {
-        id: pin.id,
-        dx: chosen.dx,
-        dy: chosen.dy,
-        hidden: false,
-      });
-    } else {
-      byId.set(pin.id, { id: pin.id, dx: 0, dy: 0, hidden: true });
+
+    if (
+      !hidden &&
+      placed.some((other) =>
+        boxesOverlap(
+          pinBox(pin.x, pin.y, dx, dy),
+          pinBox(other.pin.x, other.pin.y, other.dx, other.dy),
+        ),
+      )
+    ) {
+      hidden = true;
+      dx = 0;
+      dy = 0;
     }
+
+    if (!hidden) {
+      placed.push({ pin, dx, dy });
+    }
+    byId.set(pin.id, { id: pin.id, dx, dy, hidden });
   }
 
   return pins.map((pin) => byId.get(pin.id)!);

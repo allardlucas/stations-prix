@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { PIN_ICON_ANCHOR, PIN_ICON_SIZE } from "./pin";
 import {
-  PIN_LAYOUT_MAX_RING,
-  PIN_SLOT_X,
+  PIN_LAYOUT_GAP,
+  PIN_LAYOUT_MAX_SHIFT,
   PIN_SLOT_Y,
   boxesOverlap,
   layoutPins,
+  minSeparation,
   pinBox,
-  spiralSlots,
   type PixelPin,
 } from "./pinLayout";
 
@@ -41,15 +41,11 @@ describe("pinBox", () => {
 
 describe("boxesOverlap", () => {
   it("detects stacked style-A pins at the same point", () => {
-    const a = pinBox(100, 100);
-    const b = pinBox(100, 100);
-    expect(boxesOverlap(a, b)).toBe(true);
+    expect(boxesOverlap(pinBox(100, 100), pinBox(100, 100))).toBe(true);
   });
 
   it("detects a near miss that still covers the chip", () => {
-    const a = pinBox(0, 0);
-    const b = pinBox(80, 10);
-    expect(boxesOverlap(a, b)).toBe(true);
+    expect(boxesOverlap(pinBox(0, 0), pinBox(80, 10))).toBe(true);
   });
 
   it("allows touching edges and far-apart pins", () => {
@@ -60,13 +56,14 @@ describe("boxesOverlap", () => {
   });
 });
 
-describe("spiralSlots", () => {
-  it("starts at origin then prefers E / W / N", () => {
-    const slots = spiralSlots(1);
-    expect(slots[0]).toEqual({ dx: 0, dy: 0 });
-    expect(slots[1]).toEqual({ dx: PIN_SLOT_X, dy: 0 });
-    expect(slots[2]).toEqual({ dx: -PIN_SLOT_X, dy: 0 });
-    expect(slots[3]).toEqual({ dx: 0, dy: -PIN_SLOT_Y });
+describe("minSeparation", () => {
+  it("picks the shortest cardinal nudge, preferring up when equal", () => {
+    const mover = pinBox(0, 0);
+    const blocker = pinBox(0, 0);
+    expect(minSeparation(mover, blocker)).toEqual({
+      dx: 0,
+      dy: -(PIN_ICON_SIZE[1] + PIN_LAYOUT_GAP),
+    });
   });
 });
 
@@ -79,13 +76,14 @@ describe("layoutPins", () => {
     ]);
   });
 
-  it("offsets a cheaper-losing pair so both 120×40 boxes stay readable", () => {
+  it("nudges a same-point pair just enough to keep both 120×40 boxes readable", () => {
     const cheap = pin("cheap", 50, 80, 0);
     const dear = pin("dear", 50, 80, 1);
     const [a, b] = layoutPins([cheap, dear]);
     expect(a).toEqual({ id: "cheap", dx: 0, dy: 0, hidden: false });
     expect(b.hidden).toBe(false);
     expect(b.dx !== 0 || b.dy !== 0).toBe(true);
+    expect(Math.abs(b.dx) + Math.abs(b.dy)).toBeLessThanOrEqual(PIN_SLOT_Y);
     expect(boxesOverlap(placedBox(cheap, a.dx, a.dy), placedBox(dear, b.dx, b.dy))).toBe(
       false,
     );
@@ -97,6 +95,7 @@ describe("layoutPins", () => {
     const laid = layoutPins([a, b]);
     expect(laid[0]).toMatchObject({ id: "west", dx: 0, dy: 0, hidden: false });
     expect(laid[1].hidden).toBe(false);
+    expect(Math.abs(laid[1].dx) + Math.abs(laid[1].dy)).toBeLessThanOrEqual(60);
     expect(
       boxesOverlap(placedBox(a, laid[0].dx, laid[0].dy), placedBox(b, laid[1].dx, laid[1].dy)),
     ).toBe(false);
@@ -108,15 +107,20 @@ describe("layoutPins", () => {
     expect(focus).toEqual({ id: "focus", dx: 0, dy: 0, hidden: false });
   });
 
-  it("hides extras when the same-point pile exceeds the spiral", () => {
-    const slots = spiralSlots(PIN_LAYOUT_MAX_RING);
-    const pins = slots.map((_, i) => pin(`p${i}`, 0, 0, i));
-    pins.push(pin("overflow", 0, 0, slots.length));
+  it("hides extras when the same-point pile exceeds the max shift", () => {
+    const count = 16;
+    const pins = Array.from({ length: count }, (_, i) => pin(`p${i}`, 0, 0, i));
     const laid = layoutPins(pins);
     const hidden = laid.filter((item) => item.hidden);
-    expect(hidden.map((item) => item.id)).toEqual(["overflow"]);
     const visible = laid.filter((item) => !item.hidden);
-    expect(visible).toHaveLength(slots.length);
+    expect(hidden.length).toBeGreaterThan(0);
+    expect(visible.length).toBeGreaterThan(1);
+    expect(visible.length).toBeLessThan(count);
+    for (const item of visible) {
+      expect(item.dx * item.dx + item.dy * item.dy).toBeLessThanOrEqual(
+        PIN_LAYOUT_MAX_SHIFT * PIN_LAYOUT_MAX_SHIFT,
+      );
+    }
     for (let i = 0; i < visible.length; i++) {
       for (let j = i + 1; j < visible.length; j++) {
         const left = pins.find((p) => p.id === visible[i].id)!;
