@@ -359,8 +359,12 @@ body,
 
 .pin-mark {
   flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: block;
+  overflow: hidden;
   border-radius: 50%;
+  background: transparent;
 }
 
 .pin-body {
