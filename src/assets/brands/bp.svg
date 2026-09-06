@@ -1,0 +1,18 @@
+<svg class="pin-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <circle cx="12" cy="12" r="12" fill="#00965E"/>
+  <g fill="#F7D117">
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(30 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(60 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(90 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(120 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(150 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(180 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(210 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(240 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(270 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(300 12 12)"/>
+    <ellipse cx="12" cy="5.5" rx="1.55" ry="3.35" transform="rotate(330 12 12)"/>
+  </g>
+  <circle cx="12" cy="12" r="3.15" fill="#00965E"/>
+</svg>

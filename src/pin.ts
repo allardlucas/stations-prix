@@ -1,35 +1,79 @@
 import { OTHER_BRAND, type BrandKey } from "./brand";
 import { FRESHNESS_OPACITY, FUEL_FIELDS, type Fuel, type FreshnessBucket } from "./domain";
+import aldiSvg from "./assets/brands/aldi.svg?raw";
+import as24Svg from "./assets/brands/as24.svg?raw";
+import auchanSvg from "./assets/brands/auchan.svg?raw";
+import autreSvg from "./assets/brands/autre.svg?raw";
+import aviaSvg from "./assets/brands/avia.svg?raw";
+import bpSvg from "./assets/brands/bp.svg?raw";
+import carrefourSvg from "./assets/brands/carrefour.svg?raw";
+import casinoSvg from "./assets/brands/casino.svg?raw";
+import coraSvg from "./assets/brands/cora.svg?raw";
+import dyneffSvg from "./assets/brands/dyneff.svg?raw";
+import eleclercSvg from "./assets/brands/eleclerc.svg?raw";
+import elanSvg from "./assets/brands/elan.svg?raw";
+import eniSvg from "./assets/brands/eni.svg?raw";
+import essoSvg from "./assets/brands/esso.svg?raw";
+import intermarcheSvg from "./assets/brands/intermarche.svg?raw";
+import lidlSvg from "./assets/brands/lidl.svg?raw";
+import nettoSvg from "./assets/brands/netto.svg?raw";
+import q8Svg from "./assets/brands/q8.svg?raw";
+import shellSvg from "./assets/brands/shell.svg?raw";
+import superuSvg from "./assets/brands/superu.svg?raw";
+import totalenergiesSvg from "./assets/brands/totalenergies.svg?raw";
 
 export type BrandMark = {
-  letters: string;
   fill: string;
-  ink: string;
+  kind: "logo" | "pump";
 };
 
-/** Pastilles / monogrammes SVG maison — pas de logos officiels scrapés. */
+/** Disques couleur — le dessin est le SVG bundlé, pas un monogramme. */
 const MARKS: Record<string, BrandMark> = {
-  TotalEnergies: { letters: "TE", fill: "#c2410c", ink: "#fff7ed" },
-  Intermarché: { letters: "IM", fill: "#be123c", ink: "#fff1f2" },
-  "E.Leclerc": { letters: "L", fill: "#1d4ed8", ink: "#eff6ff" },
-  Carrefour: { letters: "C", fill: "#0369a1", ink: "#f0f9ff" },
-  Auchan: { letters: "A", fill: "#dc2626", ink: "#fef2f2" },
-  Esso: { letters: "Es", fill: "#b45309", ink: "#fffbeb" },
-  BP: { letters: "BP", fill: "#15803d", ink: "#f0fdf4" },
-  Shell: { letters: "Sh", fill: "#ca8a04", ink: "#1c1917" },
-  Avia: { letters: "Av", fill: "#7c3aed", ink: "#f5f3ff" },
-  Eni: { letters: "En", fill: "#eab308", ink: "#1c1917" },
-  "Super U": { letters: "U", fill: "#be185d", ink: "#fdf2f8" },
-  Casino: { letters: "Ca", fill: "#b91c1c", ink: "#fef2f2" },
-  Lidl: { letters: "Li", fill: "#0369a1", ink: "#f0f9ff" },
-  Aldi: { letters: "Al", fill: "#0369a1", ink: "#fefce8" },
-  Dyneff: { letters: "Dy", fill: "#ea580c", ink: "#fff7ed" },
-  Elan: { letters: "É", fill: "#0f766e", ink: "#f0fdfa" },
-  Q8: { letters: "Q8", fill: "#b91c1c", ink: "#fff7ed" },
-  AS24: { letters: "24", fill: "#334155", ink: "#f8fafc" },
-  Netto: { letters: "N", fill: "#ca8a04", ink: "#1c1917" },
-  Cora: { letters: "Co", fill: "#1d4ed8", ink: "#eff6ff" },
-  [OTHER_BRAND]: { letters: "S", fill: "#475569", ink: "#f8fafc" },
+  TotalEnergies: { fill: "#e30613", kind: "logo" },
+  Intermarché: { fill: "#e30613", kind: "logo" },
+  "E.Leclerc": { fill: "#0055a4", kind: "logo" },
+  Carrefour: { fill: "#003087", kind: "logo" },
+  Auchan: { fill: "#e30613", kind: "logo" },
+  Esso: { fill: "#e30613", kind: "logo" },
+  BP: { fill: "#00965e", kind: "logo" },
+  Shell: { fill: "#fbce07", kind: "logo" },
+  Avia: { fill: "#003399", kind: "logo" },
+  Eni: { fill: "#ffd100", kind: "logo" },
+  "Super U": { fill: "#e2007a", kind: "logo" },
+  Casino: { fill: "#c8102e", kind: "logo" },
+  Lidl: { fill: "#0050aa", kind: "logo" },
+  Aldi: { fill: "#ff6a00", kind: "logo" },
+  Dyneff: { fill: "#f15a22", kind: "logo" },
+  Elan: { fill: "#0d7377", kind: "logo" },
+  Q8: { fill: "#e30613", kind: "logo" },
+  AS24: { fill: "#1b365d", kind: "logo" },
+  Netto: { fill: "#ffd200", kind: "logo" },
+  Cora: { fill: "#003399", kind: "logo" },
+  [OTHER_BRAND]: { fill: "#475569", kind: "pump" },
+};
+
+const LOGOS: Record<string, string> = {
+  TotalEnergies: totalenergiesSvg,
+  Intermarché: intermarcheSvg,
+  "E.Leclerc": eleclercSvg,
+  Carrefour: carrefourSvg,
+  Auchan: auchanSvg,
+  Esso: essoSvg,
+  BP: bpSvg,
+  Shell: shellSvg,
+  Avia: aviaSvg,
+  Eni: eniSvg,
+  "Super U": superuSvg,
+  Casino: casinoSvg,
+  Lidl: lidlSvg,
+  Aldi: aldiSvg,
+  Dyneff: dyneffSvg,
+  Elan: elanSvg,
+  Q8: q8Svg,
+  AS24: as24Svg,
+  Netto: nettoSvg,
+  Cora: coraSvg,
+  [OTHER_BRAND]: autreSvg,
 };
 
 export const PIN_ICON_SIZE = [120, 40] as const;
@@ -52,10 +96,12 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+function compactSvg(svg: string): string {
+  return svg.replace(/>\s+</g, "><").trim();
+}
+
 export function brandMarkSvg(brandKey: string): string {
-  const mark = brandMark(brandKey);
-  const size = mark.letters.length > 1 ? "9.5" : "12";
-  return `<svg class="pin-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="12" fill="${mark.fill}"/><text x="12" y="16.2" text-anchor="middle" fill="${mark.ink}" font-size="${size}" font-weight="700" font-family="system-ui,sans-serif">${escapeHtml(mark.letters)}</text></svg>`;
+  return compactSvg(LOGOS[brandKey] ?? LOGOS[OTHER_BRAND]);
 }
 
 export type PinModel = {

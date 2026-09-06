@@ -1,0 +1,6 @@
+<svg class="pin-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <circle cx="12" cy="12" r="12" fill="#0055A4"/>
+  <circle cx="12" cy="10.6" r="6.4" fill="#fff"/>
+  <circle cx="12" cy="10.6" r="4.5" fill="#0055A4"/>
+  <rect x="4.8" y="17.4" width="14.4" height="2.3" rx="1.15" fill="#E30613"/>
+</svg>

@@ -1,0 +1,6 @@
+<svg class="pin-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <circle cx="12" cy="12" r="12" fill="#fff"/>
+  <ellipse cx="12" cy="12" rx="10.2" ry="7.3" fill="#E30613"/>
+  <ellipse cx="12" cy="12" rx="8.1" ry="5.5" fill="#fff"/>
+  <ellipse cx="12" cy="12" rx="6.2" ry="4" fill="#0033A0"/>
+</svg>

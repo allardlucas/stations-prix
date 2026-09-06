@@ -1,0 +1,5 @@
+<svg class="pin-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+  <circle cx="12" cy="12" r="12" fill="#fff"/>
+  <path d="M19.2 10.6A8 8 0 0 0 12 4 8 8 0 0 0 4 12h3.1A4.9 4.9 0 0 1 12 7.1 4.9 4.9 0 0 1 16.7 10.6Z" fill="#E31E24"/>
+  <path d="M19.2 13.4A8 8 0 0 1 12 20 8 8 0 0 1 4 12h3.1A4.9 4.9 0 0 0 12 16.9 4.9 4.9 0 0 0 16.7 13.4Z" fill="#003087"/>
+</svg>

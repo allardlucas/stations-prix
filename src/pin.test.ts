@@ -10,16 +10,18 @@ import {
   pinHtml,
 } from "./pin";
 
+const MONOGRAMS = ["TE", "IM", ">L<", ">C<", "Es", "Sh", "Av", "Ca", "Li", "Al", "Dy", "É", ">S<"];
+
 describe("brandMark", () => {
-  it("gives a monogram pastille for every known enseigne plus Autre", () => {
+  it("gives a logo (or pump fallback) for every known enseigne plus Autre", () => {
     for (const key of BRAND_KEYS) {
       const mark = brandMark(key);
-      expect(mark.letters.length).toBeGreaterThan(0);
-      expect(mark.letters.length).toBeLessThanOrEqual(2);
+      expect(mark.kind).toBe("logo");
       expect(mark.fill).toMatch(/^#[0-9a-f]{6}$/i);
     }
-    expect(brandMark(OTHER_BRAND).letters).toBe("S");
-    expect(brandMark("Inconnue").letters).toBe(brandMark(OTHER_BRAND).letters);
+    expect(brandMark(OTHER_BRAND).kind).toBe("pump");
+    expect(brandMark("Inconnue").kind).toBe("pump");
+    expect(brandMark("Inconnue").fill).toBe(brandMark(OTHER_BRAND).fill);
   });
 
   it("covers the whole FR dictionary", () => {
@@ -28,13 +30,34 @@ describe("brandMark", () => {
 });
 
 describe("brandMarkSvg", () => {
-  it("is an inline SVG pastille, not a scraped official logo", () => {
+  it("inlines a local logo SVG, not a monogram or a remote asset", () => {
     const svg = brandMarkSvg("TotalEnergies");
     expect(svg).toContain("<svg");
-    expect(svg).toContain("<circle");
-    expect(svg).toContain("TE");
+    expect(svg).toContain('class="pin-mark"');
+    expect(svg).toContain("#E30613");
+    expect(svg).not.toContain("<text");
+    expect(svg).not.toContain("TE");
     expect(svg).not.toMatch(/https?:\/\//);
-    expect(svg).not.toMatch(/wikimedia|brandfetch|clearbit|\.png|\.svg/i);
+    expect(svg).not.toMatch(/wikimedia|brandfetch|clearbit/i);
+  });
+
+  it("uses a generic pump for Autre / unknown, without random letters", () => {
+    const svg = brandMarkSvg(OTHER_BRAND);
+    expect(svg).toBe(brandMarkSvg("Inconnue"));
+    expect(svg).toContain("<svg");
+    expect(svg).not.toContain("<text");
+    expect(svg).not.toContain(">S<");
+  });
+
+  it("never falls back to letter pastilles for dictionary brands", () => {
+    for (const key of BRAND_KEYS) {
+      const svg = brandMarkSvg(key);
+      expect(svg, key).toContain("<svg");
+      expect(svg, key).not.toContain("<text");
+      for (const letters of MONOGRAMS) {
+        expect(svg, `${key} ${letters}`).not.toContain(letters);
+      }
+    }
   });
 });
 
@@ -47,10 +70,13 @@ describe("pinHtml", () => {
       age: "12 min",
       freshness: "full",
     });
-    expect(html).toContain("class=\"pin\"");
-    expect(html).toContain("data-freshness=\"full\"");
-    expect(html).toContain("data-brand=\"Intermarché\"");
-    expect(html).toContain("IM");
+    expect(html).toContain('class="pin"');
+    expect(html).toContain('data-freshness="full"');
+    expect(html).toContain('data-brand="Intermarché"');
+    expect(html).toContain('class="pin-mark"');
+    expect(html).toContain("#2E7D32");
+    expect(html).not.toContain("IM");
+    expect(html).not.toContain("<text");
     expect(html).toContain("Gazole");
     expect(html).toContain("1,749 €");
     expect(html).toContain("12 min");
@@ -70,13 +96,14 @@ describe("pinHtml", () => {
     expect(html).toContain("pin is-on");
     expect(html).toContain("E10");
     expect(html).toContain(`opacity:${FRESHNESS_OPACITY.faint}`);
+    expect(html).not.toContain("<text");
   });
 
   it("escapes untrusted pin text", () => {
     const html = pinHtml({
       brandKey: OTHER_BRAND,
       fuel: "sp95",
-      price: '<img src=x>',
+      price: "<img src=x>",
       age: '1" onclick=alert(1)',
       freshness: "mid",
     });
