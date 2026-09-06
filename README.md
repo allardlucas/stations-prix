@@ -2,7 +2,7 @@
 
 Stations proches et prix du carburant choisi. Toutes les stations du viewport qui ont un prix sont affichées ; l’âge change l’opacité du pin (plein ≤24 h, moyen ≤72 h, pâle au-delà).
 
-Lucas ouvre la page avant le plein, choisit un carburant, lit le prix et l'âge sur les pins.
+Lucas ouvre la page avant le plein, choisit un carburant, lit le prix et l'âge sur les pins. La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut).
 
 ## Lancer
 
