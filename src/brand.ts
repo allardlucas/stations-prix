@@ -19,32 +19,68 @@ export const BRAND_KEYS = [
   "Dyneff",
   "Elan",
   "Q8",
+  "AS24",
+  "Netto",
+  "Cora",
 ] as const;
 
 export type BrandKey = (typeof BRAND_KEYS)[number] | typeof OTHER_BRAND;
 
 const ALIASES: { key: Exclude<BrandKey, typeof OTHER_BRAND>; tokens: string[] }[] =
   [
-    { key: "TotalEnergies", tokens: ["totalenergies", "total energie", "total"] },
-    { key: "Intermarché", tokens: ["intermarche"] },
-    { key: "E.Leclerc", tokens: ["e leclerc", "eleclerc", "leclerc"] },
+    {
+      key: "TotalEnergies",
+      tokens: [
+        "totalenergies",
+        "total energie",
+        "total access",
+        "total contact",
+        "total",
+      ],
+    },
+    {
+      key: "Intermarché",
+      tokens: [
+        "intermarche contact",
+        "intermarche super",
+        "intermarche express",
+        "intermarche",
+        "roady",
+      ],
+    },
+    {
+      key: "E.Leclerc",
+      tokens: ["e leclerc", "eleclerc", "leclerc"],
+    },
     {
       key: "Carrefour",
-      tokens: ["carrefour market", "carrefour contact", "carrefour express", "carrefour"],
+      tokens: [
+        "carrefour market",
+        "carrefour contact",
+        "carrefour express",
+        "carrefour city",
+        "carrefour",
+      ],
     },
-    { key: "Auchan", tokens: ["simply market", "auchan"] },
+    { key: "Auchan", tokens: ["simply market", "myauchan", "simply", "auchan"] },
     { key: "Esso", tokens: ["esso express", "esso"] },
     { key: "BP", tokens: ["bp"] },
     { key: "Shell", tokens: ["shell"] },
     { key: "Avia", tokens: ["avia"] },
     { key: "Eni", tokens: ["eni", "agip"] },
-    { key: "Super U", tokens: ["super u", "hyper u", "u express", "systeme u"] },
-    { key: "Casino", tokens: ["geant casino", "geant", "casino"] },
+    {
+      key: "Super U",
+      tokens: ["super u", "hyper u", "u express", "systeme u", "marche u"],
+    },
+    { key: "Casino", tokens: ["geant casino", "petit casino", "geant", "vival", "casino"] },
     { key: "Lidl", tokens: ["lidl"] },
     { key: "Aldi", tokens: ["aldi"] },
     { key: "Dyneff", tokens: ["dyneff"] },
     { key: "Elan", tokens: ["elan"] },
     { key: "Q8", tokens: ["q8"] },
+    { key: "AS24", tokens: ["as 24", "as24"] },
+    { key: "Netto", tokens: ["netto"] },
+    { key: "Cora", tokens: ["cora"] },
   ];
 
 export function foldBrandText(value: string): string {

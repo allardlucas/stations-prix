@@ -26,7 +26,7 @@ Si la géoloc est refusée ou expire, le centre est Bayonne (43.49, -1.47). Ensu
 
 Si la bbox dépasse 1° de lat ou lon (~80–110 km), aucun fetch : le bandeau demande de zoomer (choix le plus simple pour le mobile). L’API ODS v2.1 plafonne à 100 records ; au plafond le bandeau le dit.
 
-Le schéma live n’a pas `marque` / `nom` / `enseigne` (47 champs). Ils sont parsés s’ils arrivent. Sinon l’enseigne est déduite des tokens connus dans le nom/brand OSM au recalage, ou dans l’adresse. Pas de match → tag filtre **Autre** (visible tant que le filtre est « Toutes ») ; la fiche n’affiche pas « Autre » comme une enseigne. La liste du filtre = enseignes présentes dans le viewport.
+Le schéma live n’a pas `marque` / `nom` / `enseigne` (47 champs). Ils sont parsés s’ils arrivent. Sinon l’enseigne est déduite des tokens connus dans le nom/brand OSM au recalage, ou dans l’adresse. Nominatim omet souvent `brand` : un passage Overpass complète le tag si le nom n’a pas de token (ex. Relais + `brand=TotalEnergies`). Pas de match → tag filtre **Autre** (visible tant que le filtre est « Toutes ») ; la fiche n’affiche pas « Autre » comme une enseigne. La liste du filtre = enseignes présentes dans le viewport. Pas de table id→enseigne.
 
 `pop` est bien dans le flux live : **A** = autoroute, **R** = route (sample 2026-09-06 : 436 A / 9369 R, dont Bidart A63 `64210005`). Le toggle **Autoroute** ne garde que `pop=A`.
 

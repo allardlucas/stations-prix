@@ -43,6 +43,54 @@ describe("inferBrand", () => {
     });
   });
 
+  it("matches the FR enseigne dictionary on typical OSM name/brand strings", () => {
+    const cases: { text: string; key: string }[] = [
+      { text: "Total Access", key: "TotalEnergies" },
+      { text: "Total Contact", key: "TotalEnergies" },
+      { text: "TotalEnergies", key: "TotalEnergies" },
+      { text: "Station Service E.Leclerc", key: "E.Leclerc" },
+      { text: "E. Leclerc", key: "E.Leclerc" },
+      { text: "Carrefour Market", key: "Carrefour" },
+      { text: "Carrefour City", key: "Carrefour" },
+      { text: "Intermarché Contact", key: "Intermarché" },
+      { text: "Roady", key: "Intermarché" },
+      { text: "Super U", key: "Super U" },
+      { text: "Hyper U Cambo", key: "Super U" },
+      { text: "Système U", key: "Super U" },
+      { text: "Agip", key: "Eni" },
+      { text: "Station-service AVIA", key: "Avia" },
+      { text: "Station Service Dyneff", key: "Dyneff" },
+      { text: "AS24", key: "AS24" },
+      { text: "AS 24", key: "AS24" },
+      { text: "Netto", key: "Netto" },
+      { text: "Cora", key: "Cora" },
+      { text: "MyAuchan", key: "Auchan" },
+    ];
+    for (const row of cases) {
+      expect(inferBrand({ osmName: row.text }), row.text).toEqual({
+        key: row.key,
+        label: row.key,
+      });
+      expect(inferBrand({ osmBrand: row.text }), row.text).toEqual({
+        key: row.key,
+        label: row.key,
+      });
+    }
+  });
+
+  it("uses OSM brand when the name is a generic Relais without a token", () => {
+    expect(
+      inferBrand({
+        osmName: "Relais Bayonne Sainte-Croix",
+        osmBrand: "TotalEnergies",
+      }),
+    ).toEqual({ key: "TotalEnergies", label: "TotalEnergies" });
+    expect(inferBrand({ osmName: "Relais Bayonne Sainte-Croix" })).toEqual({
+      key: OTHER_BRAND,
+      label: "",
+    });
+  });
+
   it("falls back to known tokens in the address", () => {
     expect(inferBrand({ address: "Parking Carrefour Market" })).toEqual({
       key: "Carrefour",
@@ -78,6 +126,19 @@ describe("applyBrandFromSnap", () => {
         { kind: "snap", name: "Intermarché", brand: "Intermarché" },
       ),
     ).toEqual({ brand: "Intermarché", brandKey: "Intermarché" });
+  });
+
+  it("tags a Relais from OSM brand at snap, not from the generic name", () => {
+    expect(
+      applyBrandFromSnap(
+        { brand: "", brandKey: OTHER_BRAND, address: "20 AVENUE MARECHAL JUIN" },
+        {
+          kind: "snap",
+          name: "Relais Bayonne Sainte-Croix",
+          brand: "TotalEnergies",
+        },
+      ),
+    ).toEqual({ brand: "TotalEnergies", brandKey: "TotalEnergies" });
   });
 
   it("keeps Autre when the snap has no brand token", () => {
