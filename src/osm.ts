@@ -1,3 +1,4 @@
+import { inferBrand, OTHER_BRAND } from "./brand";
 import { brandName, type RawStation, type VisibleStation } from "./domain";
 import { EARTH_RADIUS_KM, haversineKm, type LatLon } from "./geo";
 import { type BBox } from "./viewport";
@@ -615,6 +616,54 @@ export async function fetchOverpassFuels(
   return parseOverpassFuels(await response.json());
 }
 
+/** Nominatim omet souvent `extratags.brand` : Overpass le porte encore. */
+export function poiNeedsBrandEnrichment(poi: OsmFuel): boolean {
+  if (!poi.refPrixId && !poi.name && !poi.brand) {
+    return false;
+  }
+  return inferBrand({ osmName: poi.name, osmBrand: poi.brand }).key === OTHER_BRAND;
+}
+
+function preferKnownOsmText(primary?: string, fallback?: string): string | undefined {
+  if (primary && inferBrand({ osmBrand: primary, osmName: primary }).key !== OTHER_BRAND) {
+    return primary;
+  }
+  if (fallback && inferBrand({ osmBrand: fallback, osmName: fallback }).key !== OTHER_BRAND) {
+    return fallback;
+  }
+  return primary ?? fallback;
+}
+
+function sameFuelCoord(a: OsmFuel, b: OsmFuel): boolean {
+  return Math.abs(a.lat - b.lat) < 1e-4 && Math.abs(a.lon - b.lon) < 1e-4;
+}
+
+/** Copie name/brand Overpass sur le POI Nominatim (ref ODS ou même geom). */
+export function mergeOsmFuelTags(base: OsmFuel[], extra: OsmFuel[]): OsmFuel[] {
+  if (extra.length === 0) {
+    return base;
+  }
+  const byRef = new Map<string, OsmFuel>();
+  for (const poi of extra) {
+    if (poi.refPrixId) {
+      byRef.set(poi.refPrixId, poi);
+    }
+  }
+  return base.map((poi) => {
+    const hit =
+      (poi.refPrixId ? byRef.get(poi.refPrixId) : undefined) ??
+      extra.find((candidate) => sameFuelCoord(poi, candidate));
+    if (!hit) {
+      return poi;
+    }
+    return {
+      ...poi,
+      name: preferKnownOsmText(poi.name, hit.name) ?? poi.name ?? hit.name,
+      brand: preferKnownOsmText(poi.brand, hit.brand) ?? poi.brand ?? hit.brand,
+    };
+  });
+}
+
 export async function fetchFuelPoisInBbox(
   bbox: BBox,
   options: {
@@ -623,7 +672,19 @@ export async function fetchFuelPoisInBbox(
   } = {},
 ): Promise<OsmFuel[]> {
   try {
-    return await fetchNominatimFuels(bbox, options);
+    const pois = await fetchNominatimFuels(bbox, options);
+    if (!pois.some(poiNeedsBrandEnrichment)) {
+      return pois;
+    }
+    try {
+      const extra = await fetchOverpassFuels(bbox, options);
+      return mergeOsmFuelTags(pois, extra);
+    } catch (error) {
+      if (options.signal?.aborted) {
+        throw error;
+      }
+      return pois;
+    }
   } catch (error) {
     if (options.signal?.aborted) {
       throw error;

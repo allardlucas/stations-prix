@@ -9,11 +9,14 @@ import {
   expandBboxKm,
   geocodePlace,
   hintFromRaw,
+  mergeOsmFuelTags,
   NOMINATIM_URL,
+  OVERPASS_URL,
   parseNominatimPlace,
   parseNominatimFuels,
   parseOverpassFuels,
   pickReliableSnap,
+  poiNeedsBrandEnrichment,
   refreshSnaps,
   scoreCandidate,
   SNAP_RADIUS_KM,
@@ -272,6 +275,75 @@ describe("parseOverpassFuels", () => {
   });
 });
 
+describe("mergeOsmFuelTags / poiNeedsBrandEnrichment", () => {
+  it("keeps a dictionary name and does not ask for Overpass", () => {
+    expect(poiNeedsBrandEnrichment(intermarcheOsm)).toBe(false);
+    expect(poiNeedsBrandEnrichment(unnamedOsm)).toBe(false);
+  });
+
+  it("asks for Overpass when OSM name is a Relais without brand token", () => {
+    expect(
+      poiNeedsBrandEnrichment({
+        lat: 43.4926,
+        lon: -1.4588,
+        name: "Relais Bayonne Sainte-Croix",
+        refPrixId: "64100015",
+      }),
+    ).toBe(true);
+  });
+
+  it("copies Overpass brand onto the Nominatim POI matched by ODS ref", () => {
+    const merged = mergeOsmFuelTags(
+      [
+        {
+          lat: 43.4926,
+          lon: -1.4588,
+          name: "Relais Bayonne Sainte-Croix",
+          refPrixId: "64100015",
+        },
+      ],
+      [
+        {
+          lat: 43.4926,
+          lon: -1.4588,
+          name: "Relais Bayonne Sainte-Croix",
+          brand: "TotalEnergies",
+          refPrixId: "64100015",
+        },
+      ],
+    );
+    expect(merged[0]).toMatchObject({
+      name: "Relais Bayonne Sainte-Croix",
+      brand: "TotalEnergies",
+      refPrixId: "64100015",
+    });
+  });
+
+  it("prefers a known Overpass brand over a Nominatim operator name", () => {
+    const merged = mergeOsmFuelTags(
+      [
+        {
+          lat: 43.5119,
+          lon: -1.4403,
+          name: "Total",
+          brand: "M. Damestoy",
+          refPrixId: "64100016",
+        },
+      ],
+      [
+        {
+          lat: 43.5119,
+          lon: -1.4403,
+          name: "Total",
+          brand: "TotalEnergies",
+          refPrixId: "64100016",
+        },
+      ],
+    );
+    expect(merged[0]?.brand).toBe("TotalEnergies");
+  });
+});
+
 describe("parseNominatimFuels", () => {
   it("reads lat/lon strings, village, postcode and ODS ref", () => {
     const pois = parseNominatimFuels([
@@ -381,10 +453,71 @@ describe("refreshSnaps", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     const url = String(fetchFn.mock.calls[0]?.[0]);
     expect(url).toContain(NOMINATIM_URL);
+    expect(url).not.toContain(OVERPASS_URL);
     const decision = cache.get("64250001");
     expect(decision?.kind).toBe("snap");
     if (decision?.kind === "snap") {
       expectNearPump(decision.lat, decision.lon);
+    }
+  });
+
+  it("enriches a Relais snap with Overpass brand when Nominatim has no token", async () => {
+    const relaisRaw: RawStation = {
+      id: 64100015,
+      geom: { lat: 43.492, lon: -1.459 },
+      adresse: "20 AVENUE MARECHAL JUIN",
+      ville: "Bayonne",
+      cp: "64100",
+      gazole_prix: 1.8,
+      gazole_maj: "2026-09-04T10:24:46+00:00",
+    };
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            lat: "43.4926067",
+            lon: "-1.4587770",
+            category: "amenity",
+            type: "fuel",
+            name: "Relais Bayonne Sainte-Croix",
+            address: { city: "Bayonne", postcode: "64100" },
+            extratags: { "ref:FR:prix-carburants": "64100015" },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          elements: [
+            {
+              type: "node",
+              lat: 43.4926067,
+              lon: -1.458777,
+              tags: {
+                amenity: "fuel",
+                name: "Relais Bayonne Sainte-Croix",
+                brand: "TotalEnergies",
+                "ref:FR:prix-carburants": "64100015",
+              },
+            },
+          ],
+        }),
+      });
+    const cache = new Map<string, SnapDecision>();
+    const changed = await refreshSnaps([relaisRaw], itxassouBbox, cache, {
+      fetchFn,
+    });
+    expect(changed).toBe(true);
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(String(fetchFn.mock.calls[0]?.[0])).toContain(NOMINATIM_URL);
+    expect(String(fetchFn.mock.calls[1]?.[0])).toBe(OVERPASS_URL);
+    const decision = cache.get("64100015");
+    expect(decision?.kind).toBe("snap");
+    if (decision?.kind === "snap") {
+      expect(decision.name).toBe("Relais Bayonne Sainte-Croix");
+      expect(decision.brand).toBe("TotalEnergies");
     }
   });
 
