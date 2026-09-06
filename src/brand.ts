@@ -86,13 +86,22 @@ export function hayHasAlias(hay: string, alias: string): boolean {
   return false;
 }
 
-function matchKey(text: string): Exclude<BrandKey, typeof OTHER_BRAND> | undefined {
+function matchKey(
+  text: string,
+  minAliasChars = 1,
+): Exclude<BrandKey, typeof OTHER_BRAND> | undefined {
   const folded = foldBrandText(text);
   if (!folded) {
     return undefined;
   }
   for (const row of ALIASES) {
-    if (row.tokens.some((alias) => hayHasAlias(folded, alias))) {
+    if (
+      row.tokens.some(
+        (alias) =>
+          foldBrandText(alias).replace(/\s/g, "").length >= minAliasChars &&
+          hayHasAlias(folded, alias),
+      )
+    ) {
       return row.key;
     }
   }
@@ -130,7 +139,8 @@ export function inferBrand(sources: BrandSources): InferredBrand {
     return { key: fromOsm, label: fromOsm };
   }
 
-  const fromAddress = sources.address ? matchKey(sources.address) : undefined;
+  // Adresse seule : pas d’alias courts (`bp` ⊂ « B.A.B.BP 423 » / boîte postale).
+  const fromAddress = sources.address ? matchKey(sources.address, 3) : undefined;
   if (fromAddress) {
     return { key: fromAddress, label: fromAddress };
   }

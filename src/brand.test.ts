@@ -50,6 +50,14 @@ describe("inferBrand", () => {
     });
   });
 
+  it("does not treat a postal BP in the address as the BP brand", () => {
+    expect(inferBrand({ address: "Boulevard du B.A.B.BP 423" })).toEqual({
+      key: OTHER_BRAND,
+      label: "",
+    });
+    expect(inferBrand({ osmName: "BP" })).toEqual({ key: "BP", label: "BP" });
+  });
+
   it("tags unknown text as Autre and keeps an ODS name if any", () => {
     expect(inferBrand({ address: "22 Chemin d'Arancette" })).toEqual({
       key: OTHER_BRAND,

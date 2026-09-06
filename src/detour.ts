@@ -109,6 +109,7 @@ export function referencePrice(
       Number.isFinite(peer.priceEur) &&
       haversineKm(origin, peer) <= nearKm,
   );
+  const self = peers.find((peer) => peer.id === stationId);
   if (nearOthers.length > 0) {
     let cheapest = nearOthers[0];
     for (const peer of nearOthers) {
@@ -119,7 +120,9 @@ export function referencePrice(
         cheapest = peer;
       }
     }
-    return { price: cheapest.priceEur, kind: "near" };
+    if (!self || self.priceEur > cheapest.priceEur) {
+      return { price: cheapest.priceEur, kind: "near" };
+    }
   }
 
   const others = peers.filter(

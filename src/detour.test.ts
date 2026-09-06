@@ -110,6 +110,18 @@ describe("referencePrice", () => {
     ).toEqual({ price: 1.55, kind: "near" });
   });
 
+  it("uses the viewport mean when this station is already the cheapest nearby", () => {
+    const self = { id: "self", lat: 43.49, lon: -1.47, priceEur: 1.4 };
+    const ref = referencePrice(
+      "self",
+      [self, nearCheap, nearHigh, farCheap],
+      origin,
+      8,
+    );
+    expect(ref?.kind).toBe("mean");
+    expect(ref?.price).toBeCloseTo((1.55 + 1.8 + 1.4) / 3, 10);
+  });
+
   it("falls back to the viewport mean when nothing is near", () => {
     const ref = referencePrice("far", [farCheap, nearCheap, nearHigh], origin, 0.01);
     expect(ref?.kind).toBe("mean");
