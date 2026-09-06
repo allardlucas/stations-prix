@@ -12,63 +12,83 @@
   </head>
   <body>
     <div id="app">
-      <header class="chrome" id="chrome">
-        <form id="place-search" class="search">
-          <input
-            id="place-q"
-            type="search"
-            name="q"
-            placeholder="Ville ou adresse"
-            enterkeyhint="search"
-            autocomplete="off"
-            aria-label="Ville ou adresse"
-          />
-          <button type="submit">OK</button>
-        </form>
-        <nav id="fuels" class="chips" aria-label="Carburant"></nav>
-        <div class="filters">
-          <label class="brand-filter">
-            <span class="sr-only">Enseigne</span>
-            <select id="brand-filter" aria-label="Enseigne">
-              <option value="toutes">Toutes</option>
-            </select>
-          </label>
-          <button type="button" id="highway-filter" aria-pressed="false">
-            Autoroute
+      <div class="hud" id="hud">
+        <div class="toolbar" id="toolbar">
+          <button
+            type="button"
+            id="toggle-params"
+            aria-expanded="false"
+            aria-controls="chrome"
+          >
+            Filtres
           </button>
-          <details class="fill" id="fill-prefs">
-            <summary id="fill-summary">Plein 50 L · 6,5 L/100</summary>
-            <div class="fill-fields">
-              <label
-                >Plein
-                <input
-                  id="tank-l"
-                  type="number"
-                  min="1"
-                  max="200"
-                  step="1"
-                  inputmode="decimal"
-                />
-                L</label
-              >
-              <label
-                >Conso
-                <input
-                  id="conso-l100"
-                  type="number"
-                  min="1"
-                  max="30"
-                  step="0.1"
-                  inputmode="decimal"
-                />
-                L/100</label
-              >
-            </div>
-          </details>
+          <button
+            type="button"
+            id="toggle-ranking"
+            aria-expanded="false"
+            aria-controls="ranking"
+          >
+            Top
+          </button>
+          <p id="banner" class="status">Chargement…</p>
         </div>
-        <nav id="favorites" class="favorites" hidden aria-label="Favoris"></nav>
-        <p id="banner" class="status">Chargement…</p>
-      </header>
+        <header class="chrome" id="chrome" hidden>
+          <form id="place-search" class="search">
+            <input
+              id="place-q"
+              type="search"
+              name="q"
+              placeholder="Ville ou adresse"
+              enterkeyhint="search"
+              autocomplete="off"
+              aria-label="Ville ou adresse"
+            />
+            <button type="submit">OK</button>
+          </form>
+          <nav id="fuels" class="chips" aria-label="Carburant"></nav>
+          <div class="filters">
+            <label class="brand-filter">
+              <span class="sr-only">Enseigne</span>
+              <select id="brand-filter" aria-label="Enseigne">
+                <option value="toutes">Toutes</option>
+              </select>
+            </label>
+            <button type="button" id="highway-filter" aria-pressed="false">
+              Autoroute
+            </button>
+            <details class="fill" id="fill-prefs">
+              <summary id="fill-summary">Plein 50 L · 6,5 L/100</summary>
+              <div class="fill-fields">
+                <label
+                  >Plein
+                  <input
+                    id="tank-l"
+                    type="number"
+                    min="1"
+                    max="200"
+                    step="1"
+                    inputmode="decimal"
+                  />
+                  L</label
+                >
+                <label
+                  >Conso
+                  <input
+                    id="conso-l100"
+                    type="number"
+                    min="1"
+                    max="30"
+                    step="0.1"
+                    inputmode="decimal"
+                  />
+                  L/100</label
+                >
+              </div>
+            </details>
+          </div>
+          <nav id="favorites" class="favorites" hidden aria-label="Favoris"></nav>
+        </header>
+      </div>
       <div id="map"></div>
       <ol id="ranking" class="ranking" hidden></ol>
     </div>

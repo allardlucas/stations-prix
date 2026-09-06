@@ -42,6 +42,12 @@ import { formatDistanceKm, haversineKm, type LatLon } from "./geo";
 import { goLinks } from "./links";
 import { applySnapToVisible, geocodePlace, refreshSnaps, type SnapDecision } from "./osm";
 import {
+  DEFAULT_PANELS,
+  rankingVisible,
+  togglePanel,
+  type PanelsState,
+} from "./panels";
+import {
   boundsToBbox,
   debounce,
   isBboxTooWide,
@@ -68,6 +74,7 @@ function requireInput(id: string): HTMLInputElement {
   return element;
 }
 
+const hud = requireElement("hud");
 const chrome = requireElement("chrome");
 const banner = requireElement("banner");
 const fuelsNav = requireElement("fuels");
@@ -80,6 +87,8 @@ const highwayButton = requireElement("highway-filter") as HTMLButtonElement;
 const fillSummary = requireElement("fill-summary");
 const tankInput = requireInput("tank-l");
 const consoInput = requireInput("conso-l100");
+const toggleParams = requireElement("toggle-params") as HTMLButtonElement;
+const toggleRanking = requireElement("toggle-ranking") as HTMLButtonElement;
 
 let selectedFuel: Fuel = "gazole";
 let focusedId: string | undefined;
@@ -96,6 +105,7 @@ let brandFilter = "toutes";
 let highwayOnly = false;
 let favorites: Favorite[] = parseFavorites(readStore(FAVORITES_STORAGE_KEY));
 let fillPrefs: FillPrefs = parseFillPrefs(readStore(FILL_STORAGE_KEY));
+let panels: PanelsState = { ...DEFAULT_PANELS };
 const markers = L.layerGroup();
 const markerById = new Map<string, L.Marker>();
 const snapCache = new Map<string, SnapDecision>();
@@ -120,8 +130,16 @@ function setBanner(text: string): void {
   banner.textContent = text;
 }
 
+function applyPanels(itemCount = 0): void {
+  chrome.hidden = !panels.params;
+  ranking.hidden = !rankingVisible(panels, itemCount);
+  toggleParams.setAttribute("aria-expanded", String(panels.params));
+  toggleRanking.setAttribute("aria-expanded", String(panels.ranking));
+  syncMapTop();
+}
+
 function syncMapTop(): void {
-  const height = Math.ceil(chrome.getBoundingClientRect().height);
+  const height = Math.ceil(hud.getBoundingClientRect().height);
   document.documentElement.style.setProperty("--chrome-h", `${height + 8}px`);
   map?.invalidateSize({ animate: false });
 }
@@ -332,10 +350,9 @@ function renderRanking(
   stations: VisibleStation[],
   now: Date,
   origin: LatLon,
-): void {
+): number {
   const top = cheapestStations(stations);
   ranking.replaceChildren();
-  ranking.hidden = top.length === 0;
 
   top.forEach((station, index) => {
     const item = document.createElement("li");
@@ -377,6 +394,7 @@ function renderRanking(
     item.append(goNav(station));
     ranking.append(item);
   });
+  return top.length;
 }
 
 function renderPins(
@@ -427,11 +445,10 @@ function renderView(): void {
     markers.clearLayers();
     markerById.clear();
     ranking.replaceChildren();
-    ranking.hidden = true;
     renderBrandOptions([]);
     renderFavorites();
     setBanner(`Zoomez pour afficher les stations · ${fuel}`);
-    syncMapTop();
+    applyPanels(0);
     return;
   }
 
@@ -443,7 +460,7 @@ function renderView(): void {
 
   const origin = distanceOrigin();
   renderPins(stations, now, origin);
-  renderRanking(stations, now, origin);
+  const topCount = renderRanking(stations, now, origin);
   renderFavorites();
 
   const cap =
@@ -461,7 +478,7 @@ function renderView(): void {
   if (focusedId) {
     markerById.get(focusedId)?.openPopup();
   }
-  syncMapTop();
+  applyPanels(topCount);
 }
 
 function renderFuelButtons(): void {
@@ -627,6 +644,15 @@ function bindChrome(): void {
   };
   tankInput.addEventListener("change", onFillChange);
   consoInput.addEventListener("change", onFillChange);
+
+  toggleParams.addEventListener("click", () => {
+    panels = togglePanel(panels, "params");
+    applyPanels(ranking.childElementCount);
+  });
+  toggleRanking.addEventListener("click", () => {
+    panels = togglePanel(panels, "ranking");
+    applyPanels(ranking.childElementCount);
+  });
 }
 
 async function start(): Promise<void> {
@@ -634,6 +660,7 @@ async function start(): Promise<void> {
   renderFillSummary();
   bindChrome();
   renderFavorites();
+  applyPanels(0);
   const center = await locate();
   map = L.map("map", { zoomControl: true }).setView(
     [center.lat, center.lon],
