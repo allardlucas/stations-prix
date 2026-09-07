@@ -19,15 +19,18 @@ import {
 import {
   FRESHNESS_OPACITY,
   FUEL_FIELDS,
-  FUELS,
+  FUEL_MODE_LABELS,
+  FUEL_MODES,
   cheapestStations,
   formatAge,
   formatPrice,
-  type Fuel,
+  petrolDeltaLabel,
+  petrolDeltaShort,
+  type FuelMode,
   type HoursInfo,
   type RawStation,
   type VisibleStation,
-  visibleStationFromRaw,
+  visibleStationFromMode,
 } from "./domain";
 import {
   FAVORITES_STORAGE_KEY,
@@ -49,8 +52,23 @@ import {
   togglePanel,
   type PanelsState,
 } from "./panels";
-import { PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
+import { PIN_DUAL_ICON_ANCHOR, PIN_DUAL_ICON_SIZE, PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
 import { layoutPins } from "./pinLayout";
+import {
+  MAX_PROFILES,
+  PROFILES_STORAGE_KEY,
+  activeProfile,
+  createProfile,
+  deleteProfile,
+  parseProfiles,
+  profileFill,
+  renameProfile,
+  serializeProfiles,
+  switchProfile,
+  updateProfileFill,
+  updateProfileFuel,
+  type ProfilesState,
+} from "./profiles";
 import { registerServiceWorker } from "./pwa";
 import { MAP_TILE_OPTIONS, USER_DOT } from "./tiles";
 import {
@@ -84,6 +102,10 @@ const hud = requireElement("hud");
 const chrome = requireElement("chrome");
 const banner = requireElement("banner");
 const fuelsNav = requireElement("fuels");
+const profilesNav = requireElement("profiles");
+const profileNameInput = requireInput("profile-name");
+const profileRename = requireElement("profile-rename") as HTMLButtonElement;
+const profileDelete = requireElement("profile-delete") as HTMLButtonElement;
 const ranking = requireElement("ranking");
 const favoritesNav = requireElement("favorites");
 const placeForm = requireElement("place-search") as HTMLFormElement;
@@ -96,7 +118,12 @@ const consoInput = requireInput("conso-l100");
 const toggleParams = requireElement("toggle-params") as HTMLButtonElement;
 const toggleRanking = requireElement("toggle-ranking") as HTMLButtonElement;
 
-let selectedFuel: Fuel = "gazole";
+let profiles: ProfilesState = parseProfiles(
+  readStore(PROFILES_STORAGE_KEY),
+  parseFillPrefs(readStore(FILL_STORAGE_KEY)),
+);
+let selectedFuelMode: FuelMode = activeProfile(profiles).fuelMode;
+let fillPrefs: FillPrefs = profileFill(activeProfile(profiles));
 let focusedId: string | undefined;
 let rawStations: RawStation[] = [];
 let positionLabel = "Bayonne (défaut)";
@@ -110,7 +137,6 @@ let ignoreMoveLabel = false;
 let brandFilter = "toutes";
 let highwayOnly = false;
 let favorites: Favorite[] = parseFavorites(readStore(FAVORITES_STORAGE_KEY));
-let fillPrefs: FillPrefs = parseFillPrefs(readStore(FILL_STORAGE_KEY));
 let panels: PanelsState = { ...DEFAULT_PANELS };
 const markers = L.layerGroup();
 const markerById = new Map<string, L.Marker>();
@@ -150,9 +176,20 @@ function syncMapTop(): void {
   map?.invalidateSize({ animate: false });
 }
 
+function persistProfiles(): void {
+  writeStore(PROFILES_STORAGE_KEY, serializeProfiles(profiles));
+  writeStore(FILL_STORAGE_KEY, serializeFillPrefs(fillPrefs));
+}
+
+function applyActiveProfile(): void {
+  const current = activeProfile(profiles);
+  selectedFuelMode = current.fuelMode;
+  fillPrefs = profileFill(current);
+}
+
 function visibleStations(now = new Date()): VisibleStation[] {
   return rawStations.flatMap((raw) => {
-    const station = visibleStationFromRaw(raw, selectedFuel, now);
+    const station = visibleStationFromMode(raw, selectedFuelMode, now);
     if (!station) {
       return [];
     }
@@ -280,6 +317,42 @@ function toggleFavorite(station: VisibleStation): void {
   renderView();
 }
 
+function sheetMeta(
+  station: VisibleStation,
+  age: string,
+  km: string,
+): HTMLElement {
+  const meta = document.createElement("div");
+  const lines: string[] = [];
+  for (const quote of station.quotes) {
+    const fuel = FUEL_FIELDS[quote.fuel].label;
+    const price = formatPrice(quote.priceEur);
+    if (quote.fuel === station.fuel) {
+      lines.push(`${fuel} ${price} · maj ${age} · ${km}`);
+    } else {
+      lines.push(`${fuel} ${price}`);
+    }
+  }
+  if (lines.length === 0) {
+    lines.push(`${formatPrice(station.priceEur)} · maj ${age} · ${km}`);
+  }
+  meta.append(
+    ...lines.map((text) => {
+      const row = document.createElement("div");
+      row.textContent = text;
+      return row;
+    }),
+  );
+  const delta = petrolDeltaLabel(station.quotes);
+  if (delta) {
+    const gap = document.createElement("div");
+    gap.className = "delta";
+    gap.textContent = delta;
+    meta.append(gap);
+  }
+  return meta;
+}
+
 function sheetContent(
   station: VisibleStation,
   price: string,
@@ -297,9 +370,7 @@ function sheetContent(
   const place = document.createElement("div");
   place.textContent = [station.address, station.city].filter(Boolean).join(" · ");
   const km = formatDistanceKm(haversineKm(origin, station));
-  const meta = document.createElement("div");
-  meta.textContent = `${price} · maj ${age} · ${km}`;
-  body.append(place, meta);
+  body.append(place, sheetMeta(station, age, km));
   if (station.highway) {
     const tag = document.createElement("div");
     tag.className = "highway";
@@ -373,7 +444,10 @@ function renderRanking(
     n.textContent = String(index + 1);
     const eur = document.createElement("span");
     eur.className = "eur";
-    eur.textContent = formatPrice(station.priceEur);
+    eur.textContent =
+      station.quotes.length > 1
+        ? `${FUEL_FIELDS[station.fuel].label} ${formatPrice(station.priceEur)}`
+        : formatPrice(station.priceEur);
     const place = document.createElement("span");
     place.className = "place";
     const label = station.brand || station.city || station.address || station.id;
@@ -393,6 +467,23 @@ function renderRanking(
       markerById.get(station.id)?.openPopup();
     });
     item.append(button);
+    const companion = station.quotes.find((quote) => quote.fuel !== station.fuel);
+    const delta = petrolDeltaLabel(station.quotes);
+    if (companion || delta) {
+      const gap = document.createElement("div");
+      gap.className = "delta";
+      const bits = [];
+      if (companion) {
+        bits.push(
+          `${FUEL_FIELDS[companion.fuel].label} ${formatPrice(companion.priceEur)}`,
+        );
+      }
+      if (delta) {
+        bits.push(delta);
+      }
+      gap.textContent = bits.join(" · ");
+      item.append(gap);
+    }
     const gain = gainLine(station, stations, origin);
     if (gain) {
       item.append(gain);
@@ -436,11 +527,14 @@ function renderPins(
   const placements = layoutPins(
     stations.map((station) => {
       const point = pinScreenPoint(station);
+      const dual = station.quotes.length > 1;
       return {
         id: station.id,
         x: point.x,
         y: point.y,
         rank: station.id === focusedId ? -1 : station.priceEur,
+        width: dual ? PIN_DUAL_ICON_SIZE[0] : PIN_ICON_SIZE[0],
+        height: dual ? PIN_DUAL_ICON_SIZE[1] : PIN_ICON_SIZE[1],
       };
     }),
   );
@@ -454,10 +548,12 @@ function renderPins(
     const age = formatAge(station.updatedAt, now);
     const price = formatPrice(station.priceEur);
     const on = station.id === focusedId;
+    const dual = station.quotes.length > 1;
+    const companion = station.quotes.find((quote) => quote.fuel !== station.fuel);
     const icon = L.divIcon({
       className: "",
-      iconSize: [...PIN_ICON_SIZE],
-      iconAnchor: [...PIN_ICON_ANCHOR],
+      iconSize: dual ? [...PIN_DUAL_ICON_SIZE] : [...PIN_ICON_SIZE],
+      iconAnchor: dual ? [...PIN_DUAL_ICON_ANCHOR] : [...PIN_ICON_ANCHOR],
       html: pinHtml({
         brandKey: station.brandKey,
         fuel: station.fuel,
@@ -465,6 +561,10 @@ function renderPins(
         age,
         freshness: station.freshness,
         selected: on,
+        alt: companion
+          ? { fuel: companion.fuel, price: formatPrice(companion.priceEur) }
+          : undefined,
+        delta: petrolDeltaShort(station.quotes),
       }),
     });
     const marker = L.marker(pinDisplayLatLng(station, place.dx, place.dy), {
@@ -493,7 +593,7 @@ function renderFillSummary(): void {
 }
 
 function renderView(): void {
-  const fuel = FUEL_FIELDS[selectedFuel].label;
+  const fuel = FUEL_MODE_LABELS[selectedFuelMode];
 
   if (viewportMode === "zoom") {
     focusedId = undefined;
@@ -538,19 +638,65 @@ function renderView(): void {
 
 function renderFuelButtons(): void {
   fuelsNav.replaceChildren();
-  for (const fuel of FUELS) {
+  for (const mode of FUEL_MODES) {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = FUEL_FIELDS[fuel].label;
-    button.setAttribute("aria-pressed", String(fuel === selectedFuel));
+    button.textContent = FUEL_MODE_LABELS[mode];
+    button.setAttribute("aria-pressed", String(mode === selectedFuelMode));
     button.addEventListener("click", () => {
-      selectedFuel = fuel;
+      selectedFuelMode = mode;
+      profiles = updateProfileFuel(profiles, activeProfile(profiles).id, mode);
+      persistProfiles();
       focusedId = undefined;
       renderFuelButtons();
       renderView();
     });
     fuelsNav.append(button);
   }
+}
+
+function renderProfiles(): void {
+  const current = activeProfile(profiles);
+  profilesNav.replaceChildren();
+  for (const profile of profiles.profiles) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = profile.name;
+    button.setAttribute("aria-pressed", String(profile.id === current.id));
+    button.addEventListener("click", () => {
+      if (profile.id === current.id) {
+        return;
+      }
+      profiles = switchProfile(profiles, profile.id);
+      applyActiveProfile();
+      persistProfiles();
+      focusedId = undefined;
+      renderProfiles();
+      renderFuelButtons();
+      renderFillSummary();
+      renderView();
+    });
+    profilesNav.append(button);
+  }
+  if (profiles.profiles.length < MAX_PROFILES) {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.textContent = "＋";
+    add.setAttribute("aria-label", "Créer un profil");
+    add.addEventListener("click", () => {
+      profiles = createProfile(profiles);
+      applyActiveProfile();
+      persistProfiles();
+      focusedId = undefined;
+      renderProfiles();
+      renderFuelButtons();
+      renderFillSummary();
+      renderView();
+    });
+    profilesNav.append(add);
+  }
+  profileNameInput.value = current.name;
+  profileDelete.disabled = profiles.profiles.length <= 1;
 }
 
 function centerMap(lat: number, lon: number, zoom: number, label: string): void {
@@ -693,7 +839,8 @@ function bindChrome(): void {
       tankL: tankInput.valueAsNumber,
       consoL100: consoInput.valueAsNumber,
     });
-    writeStore(FILL_STORAGE_KEY, serializeFillPrefs(fillPrefs));
+    profiles = updateProfileFill(profiles, activeProfile(profiles).id, fillPrefs);
+    persistProfiles();
     renderFillSummary();
     renderView();
   };
@@ -708,11 +855,41 @@ function bindChrome(): void {
     panels = togglePanel(panels, "ranking");
     applyPanels(ranking.childElementCount);
   });
+
+  const onRename = () => {
+    profiles = renameProfile(
+      profiles,
+      activeProfile(profiles).id,
+      profileNameInput.value,
+    );
+    persistProfiles();
+    renderProfiles();
+  };
+  profileRename.addEventListener("click", onRename);
+  profileNameInput.addEventListener("change", onRename);
+  profileNameInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      onRename();
+    }
+  });
+  profileDelete.addEventListener("click", () => {
+    profiles = deleteProfile(profiles, activeProfile(profiles).id);
+    applyActiveProfile();
+    persistProfiles();
+    focusedId = undefined;
+    renderProfiles();
+    renderFuelButtons();
+    renderFillSummary();
+    renderView();
+  });
 }
 
 async function start(): Promise<void> {
   renderFuelButtons();
+  renderProfiles();
   renderFillSummary();
+  persistProfiles();
   bindChrome();
   renderFavorites();
   applyPanels(0);

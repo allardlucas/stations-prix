@@ -3,16 +3,23 @@ import {
   FRESHNESS_OPACITY,
   FRESH_PRICE_AGE_MS,
   FUEL_FIELDS,
+  FUEL_MODE_LABELS,
+  FUEL_MODES,
   MAX_PRICE_AGE_MS,
   TOP_CHEAPEST,
   brandName,
   cheapestStations,
-  isHighwayPop,
   formatAge,
+  formatCt,
   freshnessBucket,
   hoursFromRaw,
+  isFuelMode,
+  isHighwayPop,
+  petrolDeltaLabel,
+  petrolDeltaShort,
   type RawStation,
   type VisibleStation,
+  visibleStationFromMode,
   visibleStationFromRaw,
 } from "./domain";
 
@@ -112,6 +119,17 @@ describe("visibleStationFromRaw fuel mapping", () => {
     expect(
       visibleStationFromRaw({ ...raw, gazole_prix: null }, "gazole", now),
     ).toBeNull();
+  });
+
+  it("fills quotes with the selected fuel", () => {
+    expect(visibleStationFromRaw(raw, "gazole", now)?.quotes).toEqual([
+      {
+        fuel: "gazole",
+        priceEur: 1.749,
+        updatedAt: new Date("2026-09-04T10:00:00.000Z"),
+        freshness: "mid",
+      },
+    ]);
   });
 
   it("passes through enseigne/nom when ODS sends them, else empty", () => {
@@ -300,6 +318,7 @@ function station(
     fuel: "gazole",
     updatedAt: now,
     freshness: "full",
+    quotes: [],
     ...partial,
   };
 }
@@ -353,4 +372,116 @@ describe("cheapestStations", () => {
     expect(top[0]).toMatchObject({ id: "old", freshness: "faint" });
     expect(top.map((row) => row.id)).toEqual(["old", "fresh-mid", "fresh-high"]);
   });
+
+  it("ranks combined petrol stations by E10 (priceEur), not SP95", () => {
+    const withE10 = station({
+      id: "e10-cheap",
+      fuel: "e10",
+      priceEur: 1.54,
+    });
+    const sp95Only = station({
+      id: "sp95-only",
+      fuel: "sp95",
+      priceEur: 1.6,
+    });
+    const e10Dear = station({
+      id: "e10-dear",
+      fuel: "e10",
+      priceEur: 1.7,
+    });
+    expect(cheapestStations([e10Dear, sp95Only, withE10]).map((row) => row.id)).toEqual(
+      ["e10-cheap", "sp95-only", "e10-dear"],
+    );
+  });
 });
+
+describe("fuel modes", () => {
+  it("replaces separate SP95 and E10 chips with one combined mode", () => {
+    expect([...FUEL_MODES]).toEqual(["gazole", "sp95_e10", "sp98", "e85"]);
+    expect(FUEL_MODE_LABELS.sp95_e10).toBe("SP95 / E10");
+    expect(isFuelMode("e10")).toBe(false);
+    expect(isFuelMode("sp95")).toBe(false);
+    expect(isFuelMode("sp95_e10")).toBe(true);
+  });
+});
+
+describe("visibleStationFromMode SP95/E10", () => {
+  it("keeps both quotes and ranks on E10 when both prices exist", () => {
+    const station = visibleStationFromMode(raw, "sp95_e10", now);
+    expect(station?.fuel).toBe("e10");
+    expect(station?.priceEur).toBe(1.654);
+    expect(station?.quotes.map((row) => row.fuel)).toEqual(["e10", "sp95"]);
+    expect(station?.quotes.map((row) => row.priceEur)).toEqual([1.654, 1.689]);
+  });
+
+  it("falls back to SP95 when E10 is missing", () => {
+    const station = visibleStationFromMode(
+      { ...raw, e10_prix: null, e10_maj: null },
+      "sp95_e10",
+      now,
+    );
+    expect(station?.fuel).toBe("sp95");
+    expect(station?.priceEur).toBe(1.689);
+    expect(station?.quotes).toHaveLength(1);
+    expect(station?.quotes[0]?.fuel).toBe("sp95");
+  });
+
+  it("keeps E10-only stations", () => {
+    const station = visibleStationFromMode(
+      { ...raw, sp95_prix: null, sp95_maj: null },
+      "sp95_e10",
+      now,
+    );
+    expect(station?.fuel).toBe("e10");
+    expect(station?.quotes).toHaveLength(1);
+  });
+
+  it("hides a station with neither SP95 nor E10", () => {
+    expect(
+      visibleStationFromMode(
+        { ...raw, sp95_prix: null, e10_prix: null },
+        "sp95_e10",
+        now,
+      ),
+    ).toBeNull();
+  });
+
+  it("leaves gazole as a solo mapping", () => {
+    expect(visibleStationFromMode(raw, "gazole", now)?.fuel).toBe("gazole");
+    expect(visibleStationFromMode(raw, "gazole", now)?.quotes).toHaveLength(1);
+  });
+});
+
+describe("petrol delta", () => {
+  it("formats centimes with a French comma", () => {
+    expect(formatCt(0.035)).toBe("3,5 ct");
+    expect(formatCt(0.04)).toBe("4 ct");
+  });
+
+  it("says when E10 is cheaper", () => {
+    const quotes = visibleStationFromMode(raw, "sp95_e10", now)!.quotes;
+    expect(petrolDeltaLabel(quotes)).toBe("E10 moins cher de 3,5 ct");
+    expect(petrolDeltaShort(quotes)).toBe("Δ −3,5 ct");
+  });
+
+  it("says when SP95 is cheaper", () => {
+    const quotes = visibleStationFromMode(
+      { ...raw, e10_prix: 1.72, sp95_prix: 1.689 },
+      "sp95_e10",
+      now,
+    )!.quotes;
+    expect(petrolDeltaLabel(quotes)).toBe("SP95 moins cher de 3,1 ct");
+    expect(petrolDeltaShort(quotes)).toBe("Δ +3,1 ct");
+  });
+
+  it("omits Δ when only one petrol price exists", () => {
+    const quotes = visibleStationFromMode(
+      { ...raw, sp95_prix: null },
+      "sp95_e10",
+      now,
+    )!.quotes;
+    expect(petrolDeltaLabel(quotes)).toBeUndefined();
+    expect(petrolDeltaShort(quotes)).toBeUndefined();
+  });
+});
+

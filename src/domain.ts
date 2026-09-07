@@ -3,6 +3,21 @@ import { inferBrand } from "./brand";
 export const FUELS = ["gazole", "sp95", "sp98", "e85", "e10"] as const;
 export type Fuel = (typeof FUELS)[number];
 
+/** Chips HUD : SP95 et E10 sont un seul mode, les autres restent solo. */
+export const FUEL_MODES = ["gazole", "sp95_e10", "sp98", "e85"] as const;
+export type FuelMode = (typeof FUEL_MODES)[number];
+
+export const FUEL_MODE_LABELS = {
+  gazole: "Gazole",
+  sp95_e10: "SP95 / E10",
+  sp98: "SP98",
+  e85: "E85",
+} as const satisfies Record<FuelMode, string>;
+
+export function isFuelMode(value: unknown): value is FuelMode {
+  return typeof value === "string" && (FUEL_MODES as readonly string[]).includes(value);
+}
+
 export const FRESH_PRICE_AGE_MS = 24 * 60 * 60 * 1000;
 export const MAX_PRICE_AGE_MS = 72 * 60 * 60 * 1000;
 
@@ -69,6 +84,13 @@ export type HoursInfo = {
   lines: string[];
 };
 
+export type FuelQuote = {
+  fuel: Fuel;
+  priceEur: number;
+  updatedAt: Date;
+  freshness: FreshnessBucket;
+};
+
 export type VisibleStation = {
   id: string;
   lat: number;
@@ -83,15 +105,15 @@ export type VisibleStation = {
   priceEur: number;
   updatedAt: Date;
   freshness: FreshnessBucket;
+  /** Prix affichés (1 solo, 2 en mode SP95/E10 quand les deux existent). */
+  quotes: FuelQuote[];
   /** Coords remplacées par un POI OSM `amenity=fuel` (recalage fiable). */
   snapped?: boolean;
 };
 
-export function visibleStationFromRaw(
+function parsedGeom(
   raw: RawStation,
-  fuel: Fuel,
-  now: Date,
-): VisibleStation | null {
+): { lat: number; lon: number } | null {
   const lat = raw.geom?.lat;
   const lon = raw.geom?.lon;
   if (
@@ -102,7 +124,14 @@ export function visibleStationFromRaw(
   ) {
     return null;
   }
+  return { lat, lon };
+}
 
+export function fuelQuoteFromRaw(
+  raw: RawStation,
+  fuel: Fuel,
+  now: Date,
+): FuelQuote | null {
   const fields = FUEL_FIELDS[fuel];
   const price = raw[fields.price];
   const maj = raw[fields.updatedAt];
@@ -118,26 +147,78 @@ export function visibleStationFromRaw(
     return null;
   }
 
+  return {
+    fuel,
+    priceEur: price,
+    updatedAt,
+    freshness: freshnessBucket(now.getTime() - updatedAt.getTime()),
+  };
+}
+
+function visibleFromQuotes(
+  raw: RawStation,
+  primary: FuelQuote,
+  quotes: FuelQuote[],
+): VisibleStation | null {
+  const geom = parsedGeom(raw);
+  if (!geom) {
+    return null;
+  }
   const odsBrand = brandName(raw);
   const inferred = inferBrand({
     odsBrand,
     address: raw.adresse ?? "",
   });
   return {
-    id: String(raw.id ?? `${lat},${lon}`),
-    lat,
-    lon,
+    id: String(raw.id ?? `${geom.lat},${geom.lon}`),
+    lat: geom.lat,
+    lon: geom.lon,
     address: raw.adresse ?? "",
     city: raw.ville ?? "",
     brand: inferred.label,
     brandKey: inferred.key,
     highway: isHighwayPop(raw.pop),
     hours: hoursFromRaw(raw),
-    fuel,
-    priceEur: price,
-    updatedAt,
-    freshness: freshnessBucket(now.getTime() - updatedAt.getTime()),
+    fuel: primary.fuel,
+    priceEur: primary.priceEur,
+    updatedAt: primary.updatedAt,
+    freshness: primary.freshness,
+    quotes,
   };
+}
+
+export function visibleStationFromRaw(
+  raw: RawStation,
+  fuel: Fuel,
+  now: Date,
+): VisibleStation | null {
+  const quote = fuelQuoteFromRaw(raw, fuel, now);
+  if (!quote) {
+    return null;
+  }
+  return visibleFromQuotes(raw, quote, [quote]);
+}
+
+/**
+ * Mode combiné SP95/E10 : visible si au moins un des deux prix existe.
+ * Tri / pin principal = E10 s’il est là, sinon SP95.
+ */
+export function visibleStationFromMode(
+  raw: RawStation,
+  mode: FuelMode,
+  now: Date,
+): VisibleStation | null {
+  if (mode !== "sp95_e10") {
+    return visibleStationFromRaw(raw, mode, now);
+  }
+  const e10 = fuelQuoteFromRaw(raw, "e10", now);
+  const sp95 = fuelQuoteFromRaw(raw, "sp95", now);
+  const quotes = [e10, sp95].filter((row): row is FuelQuote => row !== null);
+  const primary = e10 ?? sp95;
+  if (!primary) {
+    return null;
+  }
+  return visibleFromQuotes(raw, primary, quotes);
 }
 
 /** ODS `pop` : A = autoroute, R = route. Autre / vide = pas autoroute. */
@@ -314,6 +395,52 @@ export function formatAge(updatedAt: Date, now: Date): string {
 
 export function formatPrice(priceEur: number): string {
   return `${priceEur.toFixed(3).replace(".", ",")} €`;
+}
+
+export function formatCt(deltaEur: number): string {
+  const ct = Math.round(Math.abs(deltaEur) * 1000) / 10;
+  const text = Number.isInteger(ct) ? String(ct) : String(ct).replace(".", ",");
+  return `${text} ct`;
+}
+
+function quotePrice(
+  quotes: readonly FuelQuote[],
+  fuel: Fuel,
+): number | undefined {
+  return quotes.find((row) => row.fuel === fuel)?.priceEur;
+}
+
+/** Phrase d’écart SP95 vs E10, absente si un seul prix. */
+export function petrolDeltaLabel(
+  quotes: readonly FuelQuote[],
+): string | undefined {
+  const e10 = quotePrice(quotes, "e10");
+  const sp95 = quotePrice(quotes, "sp95");
+  if (e10 === undefined || sp95 === undefined) {
+    return undefined;
+  }
+  const delta = sp95 - e10;
+  if (Math.abs(delta) < 0.0005) {
+    return "même prix";
+  }
+  const ct = formatCt(delta);
+  return delta > 0 ? `E10 moins cher de ${ct}` : `SP95 moins cher de ${ct}`;
+}
+
+/** Δ compact pour pin (signe − = E10 moins cher). */
+export function petrolDeltaShort(
+  quotes: readonly FuelQuote[],
+): string | undefined {
+  const e10 = quotePrice(quotes, "e10");
+  const sp95 = quotePrice(quotes, "sp95");
+  if (e10 === undefined || sp95 === undefined) {
+    return undefined;
+  }
+  const delta = sp95 - e10;
+  if (Math.abs(delta) < 0.0005) {
+    return "Δ 0 ct";
+  }
+  return `Δ ${delta > 0 ? "−" : "+"}${formatCt(delta)}`;
 }
 
 export function cheapestStations(

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { BRAND_KEYS, OTHER_BRAND } from "./brand";
 import { FRESHNESS_OPACITY } from "./domain";
 import {
+  PIN_DUAL_ICON_ANCHOR,
+  PIN_DUAL_ICON_SIZE,
   PIN_ICON_ANCHOR,
   PIN_ICON_SIZE,
   brandMark,
@@ -122,5 +124,43 @@ describe("pinHtml", () => {
   it("sizes the Leaflet icon for the style A chip", () => {
     expect(PIN_ICON_SIZE).toEqual([120, 40]);
     expect(PIN_ICON_ANCHOR).toEqual([60, 40]);
+  });
+
+  it("sizes dual SP95/E10 pins larger for two prices + Δ", () => {
+    expect(PIN_DUAL_ICON_SIZE).toEqual([152, 56]);
+    expect(PIN_DUAL_ICON_ANCHOR).toEqual([76, 56]);
+  });
+
+  it("shows both petrol prices and Δ on a dual pin", () => {
+    const html = pinHtml({
+      brandKey: "Intermarché",
+      fuel: "e10",
+      price: "1,654 €",
+      age: "12 min",
+      freshness: "full",
+      alt: { fuel: "sp95", price: "1,689 €" },
+      delta: "Δ −3,5 ct",
+    });
+    expect(html).toContain("is-dual");
+    expect(html).toContain("E10");
+    expect(html).toContain("1,654 €");
+    expect(html).toContain("SP95");
+    expect(html).toContain("1,689 €");
+    expect(html).toContain("Δ −3,5 ct");
+  });
+
+  it("escapes dual pin alt text", () => {
+    const html = pinHtml({
+      brandKey: OTHER_BRAND,
+      fuel: "e10",
+      price: "1,654 €",
+      age: "1 min",
+      freshness: "full",
+      alt: { fuel: "sp95", price: "<img src=x>" },
+      delta: 'Δ <b onclick="alert(1)">x</b>',
+    });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x&gt;");
+    expect(html).toContain("&lt;b onclick=&quot;alert(1)&quot;&gt;x&lt;/b&gt;");
   });
 });
