@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Stations-prix">
+  <rect width="512" height="512" fill="#0b0d10"/>
+  <rect x="168" y="140" width="150" height="210" rx="22" fill="#f3f3f4"/>
+  <rect x="196" y="172" width="94" height="64" rx="10" fill="#0b0d10"/>
+  <rect x="210" y="196" width="66" height="16" rx="4" fill="#f59e0b"/>
+  <path d="M318 176C398 178 408 268 348 298" fill="none" stroke="#f3f3f4" stroke-width="28" stroke-linecap="round"/>
+  <rect x="328" y="286" width="36" height="22" rx="5" fill="#f3f3f4"/>
+  <rect x="196" y="350" width="94" height="36" rx="6" fill="#f3f3f4"/>
+</svg>

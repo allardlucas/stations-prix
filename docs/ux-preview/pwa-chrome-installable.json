@@ -1,0 +1,21 @@
+{
+  "preview": "http://127.0.0.1:4173/stations-prix/",
+  "live": "https://allardlucas.github.io/stations-prix/",
+  "chrome": "148.0.7778.96",
+  "cdp": {
+    "manifestUrl": "http://127.0.0.1:4173/stations-prix/manifest.webmanifest",
+    "manifestErrors": [],
+    "installabilityErrors": []
+  },
+  "runtime": {
+    "secureContext": true,
+    "serviceWorker": {
+      "scope": "http://127.0.0.1:4173/stations-prix/",
+      "scriptURL": "http://127.0.0.1:4173/stations-prix/sw.js",
+      "state": "activated"
+    },
+    "manifestType": "application/manifest+json",
+    "appleTouchIcon": "http://127.0.0.1:4173/stations-prix/icons/apple-touch-icon.png"
+  },
+  "note": "Lighthouse 12 n’a plus de catégorie PWA. Preuve = critères Chrome (CDP Page.getInstallabilityErrors vide) + artefacts manifest/SW/icônes."
+}

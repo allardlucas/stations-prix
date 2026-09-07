@@ -51,6 +51,7 @@ import {
 } from "./panels";
 import { PIN_ICON_ANCHOR, PIN_ICON_SIZE, pinHtml } from "./pin";
 import { layoutPins } from "./pinLayout";
+import { registerServiceWorker } from "./pwa";
 import { MAP_TILE_OPTIONS, USER_DOT } from "./tiles";
 import {
   boundsToBbox,
@@ -755,4 +756,5 @@ async function start(): Promise<void> {
   });
 }
 
+registerServiceWorker();
 void start();
