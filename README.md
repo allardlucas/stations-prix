@@ -4,6 +4,10 @@ Stations proches et prix du carburant choisi. Toutes les stations du viewport qu
 
 Lucas ouvre la page avant le plein, choisit un carburant, lit le **logo enseigne officiel** (SVG Wikimedia / Simple Icons packagé en local — pas un monogramme `TE` / `C`, pas de CDN ni Clearbit), le **type**, le **prix** et l’**âge** sur les pins. Sources / licence : `src/assets/brands/README.md`. Fond de carte **OpenFreeMap Bright** (clair, style MapLibre sans clé API — pas Carto, pas Mapbox, pas satellite, pas dark). La carte prend tout l’écran ; **Filtres** et **Top** ouvrent les panneaux (fermés par défaut). Pas de barre bas compte / historique / favoris / stats.
 
+Profils **locaux** (`localStorage`, max 5, zéro compte) : carburant défaut + plein / conso par profil. Au lancement, le dernier profil utilisé. Switch **1 tap** sur les chips HUD. Créer / renommer / supprimer depuis **Filtres**. Noms libres (`Profil 1`…), pas de prénoms hardcodés.
+
+SP95 et E10 sont un seul chip **SP95 / E10**. Pins, top et fiche montrent les **deux prix** quand ils existent, plus l’écart **Δ** (`E10 moins cher de X ct`). Le tri top se fait sur **E10 s’il est là**, sinon SP95. Gazole / SP98 / E85 restent solo.
+
 ## Lancer
 
 ```bash
@@ -43,7 +47,7 @@ Revenir sur l’onglet après plus de ~3 min depuis le dernier fetch réussi rel
 ## Vérifier à la main
 
 1. Autorise la géoloc. La carte se centre sur toi et le bandeau dit `votre position`. Refuse la géoloc. Le bandeau dit `Bayonne (défaut)`.
-2. Choisis Gazole, puis SP95, SP98, E85, E10. Les pins et la liste bas changent. Une station sans prix pour ce carburant disparaît.
+2. Choisis Gazole, puis **SP95 / E10**, SP98, E85. Plus de chips SP95 et E10 séparés. Les pins et la liste bas changent. Une station sans prix pour ce mode disparaît. En **SP95 / E10**, une station avec seulement l’un des deux reste visible ; le top trie sur E10 si présent, sinon SP95. Pins / top / fiche : les deux prix + **Δ** (`E10 moins cher de X ct`) quand les deux existent.
 3. Chaque pin montre le **logo enseigne** (signe graphique, pas des initiales) + carburant + prix + âge (`12 min`, `3 h`, `2 j`). L’opacité suit l’âge : pleine ≤24 h, moyenne ≤72 h, pâle au-delà. La liste top 5 aussi. Le fond est clair (OpenFreeMap Bright), sans filtre d’inversion.
 4. Un prix de plus de 72 h reste visible (pin pâle). Pour le prouver hors carte, lance `npm test` (E85 du 20 août = `faint` au 5 septembre).
 5. Déplace la carte hors Pays Basque : d’autres pins apparaissent, la liste top 5 se recalcule sur le viewport (y compris les prix anciens s’ils sont les moins chers). Change de carburant. Tape une ligne : le pin se centre. Dézoome trop loin : plus de pins ni de liste, bandeau « Zoomez pour afficher les stations ».
@@ -54,4 +58,5 @@ Revenir sur l’onglet après plus de ~3 min depuis le dernier fetch réussi rel
 10. Tape « Bidart » (ou une ville) : la carte se centre, le viewport recharge. Filtre enseigne : « Toutes » par défaut, liste = enseignes du viewport, **Autre** = pas de token connu.
 11. Toggle **Autoroute** : plus que `pop=A` (Aire de Bidart Est/Ouest sur l’A63). Sans le toggle, R et A restent.
 12. Fiche : **Ajouter aux favoris** (max 8) ; un chip recentre et highlight. Retrait depuis la fiche.
-13. Fiche / top 5 : ligne `approx. ±X,XX €` vs moins chère proche ou vs moyenne. Change plein / L/100 : le gain se recalcule.
+13. Fiche / top 5 : ligne `approx. ±X,XX €` vs moins chère proche ou vs moyenne. Change plein / L/100 : le gain se recalcule. Plein et conso sont **par profil**.
+14. HUD : chips de profil (dernier utilisé au lancement). **＋** crée un profil (max 5). **Filtres** : renommer / supprimer. Switch = 1 tap sur un autre chip. Pas de nav compte.

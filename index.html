@@ -38,6 +38,7 @@
           </button>
           <p id="banner" class="status">Chargement…</p>
         </div>
+        <nav id="profiles" class="chips profiles" aria-label="Profils"></nav>
         <header class="chrome" id="chrome" hidden>
           <form id="place-search" class="search">
             <input
@@ -52,6 +53,20 @@
             <button type="submit">OK</button>
           </form>
           <nav id="fuels" class="chips" aria-label="Carburant"></nav>
+          <div class="profile-edit" id="profile-edit">
+            <label class="profile-name">
+              Nom
+              <input
+                id="profile-name"
+                type="text"
+                maxlength="24"
+                autocomplete="off"
+                aria-label="Nom du profil"
+              />
+            </label>
+            <button type="button" id="profile-rename">Renommer</button>
+            <button type="button" id="profile-delete">Supprimer</button>
+          </div>
           <div class="filters">
             <label class="brand-filter">
               <span class="sr-only">Enseigne</span>

@@ -219,17 +219,82 @@ body,
   gap: 6px;
 }
 
-.chips button {
-  flex: 1;
-  min-width: 0;
-  min-height: 36px;
-  padding: 0 8px;
+.chips.profiles {
+  pointer-events: auto;
+  margin-top: 6px;
+  padding: 4px;
+  overflow-x: auto;
+  background: rgba(12, 14, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.chips.profiles button {
+  flex: 0 0 auto;
+  padding: 0 12px;
+}
+
+.profile-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.profile-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.profile-name input {
+  width: 8.5em;
+  min-height: 24px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #e8e8ea;
+  font: inherit;
+}
+
+.profile-edit button {
+  min-height: 32px;
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
   color: #e8e8ea;
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.profile-edit button:disabled {
+  opacity: 0.4;
+}
+
+.chips button {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8e8ea;
+  font: inherit;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -275,7 +340,7 @@ body,
 
 .ranking button {
   display: grid;
-  grid-template-columns: 1.2em 5.6em minmax(0, 1fr) auto;
+  grid-template-columns: 1.2em minmax(5.6em, max-content) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -357,6 +422,13 @@ body,
   line-height: 1.1;
 }
 
+.pin.is-dual {
+  width: 152px;
+  min-height: 54px;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
 .pin-mark {
   flex: 0 0 22px;
   width: 22px;
@@ -392,6 +464,24 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pin-alt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.pin-delta {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.pin.is-on .pin-alt {
+  color: #444;
 }
 
 .pin.is-on {
@@ -463,13 +553,15 @@ body,
 
 .sheet .snap-hint,
 .sheet .gain,
-.sheet .highway {
+.sheet .highway,
+.sheet .delta {
   margin-top: 4px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
 }
 
-.sheet .gain {
+.sheet .gain,
+.sheet .delta {
   color: rgba(255, 255, 255, 0.7);
 }
 
@@ -485,7 +577,8 @@ body,
   font-size: 12px;
 }
 
-.ranking .gain {
+.ranking .gain,
+.ranking .delta {
   padding: 0 10px 2px 2.2em;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);

@@ -78,6 +78,9 @@ const LOGOS: Record<string, string> = {
 
 export const PIN_ICON_SIZE = [120, 40] as const;
 export const PIN_ICON_ANCHOR = [60, 40] as const;
+/** Pins SP95/E10 avec les deux prix + Δ. */
+export const PIN_DUAL_ICON_SIZE = [152, 56] as const;
+export const PIN_DUAL_ICON_ANCHOR = [76, 56] as const;
 
 export function brandMark(brandKey: string): BrandMark {
   return MARKS[brandKey] ?? MARKS[OTHER_BRAND];
@@ -111,14 +114,20 @@ export type PinModel = {
   age: string;
   freshness: FreshnessBucket;
   selected?: boolean;
+  alt?: { fuel: Fuel; price: string };
+  delta?: string;
 };
 
 export function pinHtml(model: PinModel): string {
   const on = model.selected ? " is-on" : "";
+  const dual = model.alt ? " is-dual" : "";
   const opacity = FRESHNESS_OPACITY[model.freshness];
   const fuel = escapeHtml(FUEL_FIELDS[model.fuel].label);
   const price = escapeHtml(model.price);
   const age = escapeHtml(model.age);
   const brand = escapeHtml(model.brandKey);
-  return `<div class="pin${on}" data-freshness="${model.freshness}" data-brand="${brand}" style="opacity:${opacity}">${brandMarkSvg(model.brandKey)}<span class="pin-body"><strong>${price}</strong><span class="pin-meta"><span class="pin-fuel">${fuel}</span><span class="pin-age">${age}</span></span></span></div>`;
+  const alt = model.alt
+    ? `<span class="pin-alt"><span class="pin-alt-fuel">${escapeHtml(FUEL_FIELDS[model.alt.fuel].label)}</span><span class="pin-alt-price">${escapeHtml(model.alt.price)}</span>${model.delta ? `<span class="pin-delta">${escapeHtml(model.delta)}</span>` : ""}</span>`
+    : "";
+  return `<div class="pin${on}${dual}" data-freshness="${model.freshness}" data-brand="${brand}" style="opacity:${opacity}">${brandMarkSvg(model.brandKey)}<span class="pin-body"><strong>${price}</strong><span class="pin-meta"><span class="pin-fuel">${fuel}</span><span class="pin-age">${age}</span></span>${alt}</span></div>`;
 }

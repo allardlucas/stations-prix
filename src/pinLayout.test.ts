@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PIN_ICON_ANCHOR, PIN_ICON_SIZE } from "./pin";
+import { PIN_DUAL_ICON_ANCHOR, PIN_DUAL_ICON_SIZE, PIN_ICON_ANCHOR, PIN_ICON_SIZE } from "./pin";
 import {
   PIN_LAYOUT_GAP,
   PIN_LAYOUT_MAX_SHIFT,
@@ -138,5 +138,44 @@ describe("layoutPins", () => {
   it("preserves input order in the result", () => {
     const pins = [pin("z", 0, 0, 2), pin("a", 0, 0, 0), pin("m", 0, 0, 1)];
     expect(layoutPins(pins).map((item) => item.id)).toEqual(["z", "a", "m"]);
+  });
+
+  it("uses the wider 152×56 bbox for dual SP95/E10 pins", () => {
+    expect(PIN_DUAL_ICON_SIZE).toEqual([152, 56]);
+    const box = pinBox(200, 300, 0, 0, {
+      width: PIN_DUAL_ICON_SIZE[0],
+      height: PIN_DUAL_ICON_SIZE[1],
+    });
+    expect(box.right - box.left).toBe(152);
+    expect(box.bottom - box.top).toBe(56);
+    expect(box.left).toBe(200 - PIN_DUAL_ICON_ANCHOR[0]);
+    expect(box.bottom).toBe(300);
+
+    const cheap: PixelPin = {
+      id: "cheap",
+      x: 50,
+      y: 80,
+      rank: 0,
+      width: 152,
+      height: 56,
+    };
+    const dear: PixelPin = {
+      id: "dear",
+      x: 50,
+      y: 80,
+      rank: 1,
+      width: 152,
+      height: 56,
+    };
+    const [a, b] = layoutPins([cheap, dear]);
+    expect(a).toEqual({ id: "cheap", dx: 0, dy: 0, hidden: false });
+    expect(b.hidden).toBe(false);
+    expect(
+      boxesOverlap(
+        pinBox(cheap.x, cheap.y, a.dx, a.dy, { width: 152, height: 56 }),
+        pinBox(dear.x, dear.y, b.dx, b.dy, { width: 152, height: 56 }),
+      ),
+    ).toBe(false);
+    expect(Math.abs(b.dy)).toBe(56 + PIN_LAYOUT_GAP);
   });
 });

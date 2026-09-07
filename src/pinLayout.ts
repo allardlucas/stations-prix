@@ -8,6 +8,10 @@ export type PixelPin = {
   y: number;
   /** Plus petit = plus prioritaire (reste au plus près du point vrai). */
   rank: number;
+  /** Largeur Leaflet ; défaut = pin solo 120. */
+  width?: number;
+  /** Hauteur Leaflet ; défaut = pin solo 40. */
+  height?: number;
 };
 
 export type PinPlacement = {
@@ -24,6 +28,11 @@ export type PinBox = {
   bottom: number;
 };
 
+export type PinSize = {
+  width: number;
+  height: number;
+};
+
 /** Marge entre deux pastilles style A après offset. */
 export const PIN_LAYOUT_GAP = 4;
 
@@ -33,15 +42,41 @@ export const PIN_SLOT_Y = PIN_ICON_SIZE[1] + PIN_LAYOUT_GAP;
 /** Au-delà de 2 largeurs de pin, on masque plutôt que d’envoyer le pin hors carte. */
 export const PIN_LAYOUT_MAX_SHIFT = PIN_SLOT_X * 2;
 
-export function pinBox(x: number, y: number, dx = 0, dy = 0): PinBox {
+export function pinSizeOf(pin: Pick<PixelPin, "width" | "height">): PinSize {
+  return {
+    width: pin.width ?? PIN_ICON_SIZE[0],
+    height: pin.height ?? PIN_ICON_SIZE[1],
+  };
+}
+
+export function pinBox(
+  x: number,
+  y: number,
+  dx = 0,
+  dy = 0,
+  size?: PinSize,
+): PinBox {
+  const width = size?.width ?? PIN_ICON_SIZE[0];
+  const height = size?.height ?? PIN_ICON_SIZE[1];
+  const anchorX = size ? width / 2 : PIN_ICON_ANCHOR[0];
+  const anchorY = size ? height : PIN_ICON_ANCHOR[1];
   const ax = x + dx;
   const ay = y + dy;
   return {
-    left: ax - PIN_ICON_ANCHOR[0],
-    top: ay - PIN_ICON_ANCHOR[1],
-    right: ax + (PIN_ICON_SIZE[0] - PIN_ICON_ANCHOR[0]),
-    bottom: ay + (PIN_ICON_SIZE[1] - PIN_ICON_ANCHOR[1]),
+    left: ax - anchorX,
+    top: ay - anchorY,
+    right: ax + (width - anchorX),
+    bottom: ay + (height - anchorY),
   };
+}
+
+function boxFor(pin: PixelPin, dx = 0, dy = 0): PinBox {
+  return pinBox(pin.x, pin.y, dx, dy, pinSizeOf(pin));
+}
+
+function maxShift2(pin: PixelPin): number {
+  const max = (pinSizeOf(pin).width + PIN_LAYOUT_GAP) * 2;
+  return max * max;
 }
 
 export function boxesOverlap(a: PinBox, b: PinBox): boolean {
@@ -65,7 +100,7 @@ export function minSeparation(mover: PinBox, blocker: PinBox): { dx: number; dy:
 }
 
 /**
- * Décale les pins dont les bbox 120×40 se chevauchent.
+ * Décale les pins dont les bbox se chevauchent (120×40 solo, 152×56 dual).
  * Rang bas (prix / focus) garde (0,0) si possible.
  * Offset = plus petite séparation cardinale (spiderfy léger).
  * Décalage trop grand → hidden (tas trop dense).
@@ -74,25 +109,25 @@ export function layoutPins(pins: readonly PixelPin[]): PinPlacement[] {
   const ordered = [...pins].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id));
   const placed: { pin: PixelPin; dx: number; dy: number }[] = [];
   const byId = new Map<string, PinPlacement>();
-  const max2 = PIN_LAYOUT_MAX_SHIFT * PIN_LAYOUT_MAX_SHIFT;
 
   for (const pin of ordered) {
     let dx = 0;
     let dy = 0;
     let hidden = false;
+    const cap2 = maxShift2(pin);
 
     for (let step = 0; step < 12; step++) {
-      const box = pinBox(pin.x, pin.y, dx, dy);
+      const box = boxFor(pin, dx, dy);
       const hit = placed.find((other) =>
-        boxesOverlap(box, pinBox(other.pin.x, other.pin.y, other.dx, other.dy)),
+        boxesOverlap(box, boxFor(other.pin, other.dx, other.dy)),
       );
       if (!hit) {
         break;
       }
-      const nudge = minSeparation(box, pinBox(hit.pin.x, hit.pin.y, hit.dx, hit.dy));
+      const nudge = minSeparation(box, boxFor(hit.pin, hit.dx, hit.dy));
       dx += nudge.dx;
       dy += nudge.dy;
-      if (shiftLen2(dx, dy) > max2) {
+      if (shiftLen2(dx, dy) > cap2) {
         hidden = true;
         dx = 0;
         dy = 0;
@@ -103,10 +138,7 @@ export function layoutPins(pins: readonly PixelPin[]): PinPlacement[] {
     if (
       !hidden &&
       placed.some((other) =>
-        boxesOverlap(
-          pinBox(pin.x, pin.y, dx, dy),
-          pinBox(other.pin.x, other.pin.y, other.dx, other.dy),
-        ),
+        boxesOverlap(boxFor(pin, dx, dy), boxFor(other.pin, other.dx, other.dy)),
       )
     ) {
       hidden = true;
