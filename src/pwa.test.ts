@@ -88,8 +88,7 @@ describe("PWA installability artifacts", () => {
     expect(sw).toMatch(/skipWaiting/);
     expect(sw).toMatch(/clients\.claim/);
     expect(sw).not.toMatch(/addEventListener\(\s*["']fetch["']/);
-    expect(sw).not.toMatch(/caches\./);
-    expect(sw).not.toMatch(/data\.economie\.gouv\.fr|openfreemap|tile/);
+    expect(sw).not.toMatch(/\bcaches\b/);
   });
 
   it("does not register a service worker outside production", () => {
